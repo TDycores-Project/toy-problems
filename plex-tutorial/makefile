@@ -1,3 +1,7 @@
+TARGETS = ex1
+
+all: ${TARGETS}
+
 CFLAGS          =
 FFLAGS          =
 CPPFLAGS        =
