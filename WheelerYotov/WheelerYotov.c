@@ -13,7 +13,7 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,PetscInt
   //   | B.T(rxq) |   0    |
   //
   // return C = B.T A^-1 B
-  
+
   PetscFunctionBegin;
   PetscErrorCode ierr;
 
@@ -25,7 +25,7 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,PetscInt
   // Copy B because we will need it again
   PetscScalar AinvB[qq*rr];
   ierr = PetscMemcpy(AinvB,B,sizeof(PetscScalar)*(qq*rr));CHKERRQ(ierr);
-  
+
   // Find A = LU factors of A
   LAPACKgetrf_(&q,&q,A,&q,pivots,&info);
   if (info<0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"Bad argument to LU factorization");
@@ -34,17 +34,17 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,PetscInt
   // Solve (A^-1 * B) by back-substitution, stored in AinvB
   LAPACKgetrs_("N",&q,&r,A,&q,pivots,AinvB,&q,&info);
   if (info) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"GETRS - Bad solve");
-  
+
   // Compute (B.T * AinvB)
   PetscScalar zero = 0,one = 1;
   BLASgemm_("T","N",&r,&r,&q,&one,B,&r,AinvB,&q,&zero,&C[0],&r);
 
   ierr = PetscFree(pivots);CHKERRQ(ierr);
-  PetscFunctionReturn(0); 
+  PetscFunctionReturn(0);
 }
 
 #undef __FUNCT__
-#define __FUNCT__ ""
+#define __FUNCT__ "WheelerYotovSystem"
 PetscErrorCode WheelerYotovSystem(DM dm)
 {
   PetscFunctionBegin;
@@ -56,13 +56,13 @@ PetscErrorCode WheelerYotovSystem(DM dm)
   ierr = DMPlexGetDepthStratum (dm,0,&vStart,&vEnd);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm,1,&fStart,&fEnd);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
-  
+
   /* Loop over each vertex in the mesh. We will be setting up a local
      problem (B.T * A^-1 * B) which is relative to this vertex. The
      solution of this problem is a stencil which we assemble into the
      global system for pressure. */
   for(v=vStart;v<vEnd;v++){
-    
+
     if (v != 6) continue; // temporary, just so we look only at the middle vertex
 
     /* The square matrix A comes from the LHS of (2.43) and is of size
@@ -78,7 +78,10 @@ PetscErrorCode WheelerYotovSystem(DM dm)
       if ((closure[cl] >= cStart) && (closure[cl] < cEnd)) nB += 1;
     }
     PetscScalar A[nA*nA],B[nA*nB],C[nB*nB];
-    
+    PetscMemzero(A,sizeof(PetscScalar)*nA*nA);
+    PetscMemzero(B,sizeof(PetscScalar)*nA*nB);
+    PetscMemzero(C,sizeof(PetscScalar)*nB*nB);
+
     /* In order to assemble A and B, we need to have a local
        mapping. */
     PetscInt i=0,j=0,Amap[nA],Bmap[nB],row,col;
@@ -92,7 +95,7 @@ PetscErrorCode WheelerYotovSystem(DM dm)
 	j += 1;
       }
     }
-    
+
     /* The matrices A and B are formed by looping over the connected
        faces to the vertex v. */
     for (cl = 0; cl < closureSize*2; cl += 2) {
@@ -124,7 +127,7 @@ PetscErrorCode WheelerYotovSystem(DM dm)
 	    break;
 	  }
 	}
-     
+
 	/* Assemble contributions into B as per (2.51). The 1/2 and
 	   |e1| terms will be moved/canceled into A. */
 	if (s==0){
@@ -132,7 +135,7 @@ PetscErrorCode WheelerYotovSystem(DM dm)
 	}else{
 	  B[col*nA+row] = -1;
 	}
-	
+
 	/* To assemble A we then need the faces connected to this cell
 	   which we can get from the cone, but only if the original
 	   vertex v is also connected, which requires the closure. */
@@ -151,9 +154,9 @@ PetscErrorCode WheelerYotovSystem(DM dm)
 	      break;
 	    }
 	  }
-	  ierr = DMPlexRestoreTransitiveClosure(dm,cone[c],PETSC_TRUE,&closureSize2,&closure2);CHKERRQ(ierr);	  
+	  ierr = DMPlexRestoreTransitiveClosure(dm,cone[c],PETSC_TRUE,&closureSize2,&closure2);CHKERRQ(ierr);
 	  if (found) {
-	    
+
 	    /* This face corresponds to the column in the local
 	       system. Find the local index. */
 	    col = -1;
@@ -163,15 +166,15 @@ PetscErrorCode WheelerYotovSystem(DM dm)
 		break;
 	      }
 	    }
-	    
+
 	    /* Assemble here:
 	       Ehat: the area of cell 'support[s]' in the reference domain.
 	       s   : 3 for the unit triangle, 4 for the unit square or tetrahedron (below (2.35))
-	       Kinv: the inverse permeability tensor pulled back via PK transform, [0,0] component 
-                     if 'closure[cl] == cone[c]' and [0,1] otherwise
+	       Kinv: the inverse permeability tensor pulled back via PK transform, [0,0] component
+		     if 'closure[cl] == cone[c]' and [0,1] otherwise
 	       E2  : area of 'closure[cl]'
 	     */
-	    
+
 	    PetscReal Ehat=1,s=1,Kinv=1,E2=1;
 	    A[col*nA+row] += 2*Ehat/s*Kinv*E2;
 	  }
@@ -183,7 +186,7 @@ PetscErrorCode WheelerYotovSystem(DM dm)
     /* C = (B.T * A^-1 * B) */
     ierr = FormStencil(&A[0],&B[0],&C[0],nA,nB);CHKERRQ(ierr);
 
-    
+
   }
   PetscFunctionReturn(0);
 }
@@ -199,7 +202,7 @@ int main(int argc, char **argv)
   ierr = PetscInitialize(&argc,&argv,(char*)0,help);CHKERRQ(ierr);
   comm = PETSC_COMM_WORLD;
   ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
-  
+
   // Options
   char filename[PETSC_MAX_PATH_LEN] = "../data/simple.e";
   ierr = PetscOptionsBegin(comm,NULL,"Options","");CHKERRQ(ierr);
@@ -243,7 +246,7 @@ int main(int argc, char **argv)
   ierr = PetscObjectSetName((PetscObject)U,"RE.");CHKERRQ(ierr);
 
   ierr = WheelerYotovSystem(dm);CHKERRQ(ierr);
-    
+
   ierr = VecDestroy(&U);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = PetscFinalize();CHKERRQ(ierr);
