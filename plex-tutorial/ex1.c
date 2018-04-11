@@ -64,9 +64,9 @@ int main(int argc,char **argv)
       for (ii=0;ii<nx[0];ii++) {
 
         cells[8*cnt+0] = vert_ids[ii  ][jj  ][kk  ];
-        cells[8*cnt+1] = vert_ids[ii+1][jj  ][kk  ];
+        cells[8*cnt+3] = vert_ids[ii+1][jj  ][kk  ];
         cells[8*cnt+2] = vert_ids[ii+1][jj+1][kk  ];
-        cells[8*cnt+3] = vert_ids[ii  ][jj+1][kk  ];
+        cells[8*cnt+1] = vert_ids[ii  ][jj+1][kk  ];
 
         cells[8*cnt+4] = vert_ids[ii  ][jj  ][kk+1];
         cells[8*cnt+5] = vert_ids[ii+1][jj  ][kk+1];
@@ -135,13 +135,15 @@ int main(int argc,char **argv)
     printf("  (depth=%d) height stratum= %02d %02d   depth stratum= %02d %02d\n",ii,hStart,hEnd-1,dStart,dEnd-1);
   }
   
-  printf("\nNumber of neighbors of control volumes:\n");
-  ierr = DMPlexGetHeightStratum(dm,0,&hStart,&hEnd);CHKERRQ(ierr);
+  printf("\nInformation about faces:\n");
+  ierr = DMPlexGetHeightStratum(dm,1,&hStart,&hEnd);CHKERRQ(ierr);
   for (ii = hStart; ii<hEnd; ii++) {
     const PetscInt *supp;
     ierr = DMPlexGetSupportSize(dm,ii,&ss  );CHKERRQ(ierr);
     ierr = DMPlexGetSupport    (dm,ii,&supp);CHKERRQ(ierr);
-    printf("(%d) %d\n",ii,ss);
+    printf("(%d) num neighbors = %d  IDs of control volue = [",ii,ss);
+    for (jj = 0; jj<ss; jj++) printf("%d ",supp[jj]);
+    printf("]\n");
   }
   
   /*
