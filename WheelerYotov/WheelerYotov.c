@@ -1,6 +1,45 @@
 static char help[] = "";
+
+/*
+Mary F. Wheeler and Ivan Yotov, 'A Multipoint Flux Mixed Finite
+Element Method', SIAM J. Numer. Anal., 44(5), 2082–2106. (25 pages),
+https://doi.org/10.1137/050638473
+*/
 #include <petsc.h>
 #include <petscblaslapack.h>
+
+typedef struct {
+  PetscReal *V;
+} AppCtx;
+
+#undef __FUNCT__
+#define __FUNCT__ "AppCtxCreate"
+PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
+{
+  PetscFunctionBegin;
+  PetscErrorCode ierr;
+  PetscInt       p,pStart,pEnd;
+  PetscInt         vStart,vEnd;
+  PetscReal      dummy[3];
+  ierr = DMPlexGetChart(dm,&pStart,&pEnd);CHKERRQ(ierr);
+  ierr = DMPlexGetDepthStratum(dm,0,&vStart,&vEnd);CHKERRQ(ierr);
+  ierr = PetscMalloc((pEnd-pStart)*sizeof(PetscReal),&(user->V));CHKERRQ(ierr);
+  for(p=pStart;p<pEnd;p++){
+    if((p >= vStart) && (p < vEnd)) continue;
+    ierr = DMPlexComputeCellGeometryFVM(dm,p,&(user->V[p]),dummy,dummy);CHKERRQ(ierr);
+  }
+  PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
+#define __FUNCT__ "AppCtxDestroy"
+PetscErrorCode AppCtxDestroy(AppCtx *user)
+{
+  PetscFunctionBegin;
+  PetscErrorCode ierr;
+  ierr = PetscFree(user->V);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
 
 #undef __FUNCT__
 #define __FUNCT__ "FormStencil"
@@ -45,7 +84,7 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,PetscInt
 
 #undef __FUNCT__
 #define __FUNCT__ "WheelerYotovSystem"
-PetscErrorCode WheelerYotovSystem(DM dm)
+PetscErrorCode WheelerYotovSystem(DM dm,AppCtx *user)
 {
   PetscFunctionBegin;
   PetscErrorCode ierr;
@@ -65,9 +104,9 @@ PetscErrorCode WheelerYotovSystem(DM dm)
 
     if (v != 6) continue; // temporary, just so we look only at the middle vertex
 
-    /* The square matrix A comes from the LHS of (2.43) and is of size
+    /* The square matrix A comes from the LHS of (2.41) and is of size
        of the number of faces connected to the vertex. The matrix B
-       comes from the RHS of (2.43) and is of size (number of
+       comes from the RHS of (2.41) and is of size (number of
        connected faces x number of connected cells). If the vertex is
        an interior one, this is equal to the number of faces. */
     PetscInt *closure = NULL;
@@ -128,7 +167,7 @@ PetscErrorCode WheelerYotovSystem(DM dm)
 	  }
 	}
 
-	/* Assemble contributions into B as per (2.51). The 1/2 and
+	/* Assemble contributions into B as per (2.49). The 1/2 and
 	   |e1| terms will be moved/canceled into A. */
 	if (s==0){
 	  B[col*nA+row] =  1; // ij --> [j*nrow + i]
@@ -167,16 +206,17 @@ PetscErrorCode WheelerYotovSystem(DM dm)
 	      }
 	    }
 
-	    /* Assemble here:
+	    /* Assemble contributions into A as per (2.48).
+
 	       Ehat: the area of cell 'support[s]' in the reference domain.
-	       s   : 3 for the unit triangle, 4 for the unit square or tetrahedron (below (2.35))
+	       s   : 3 for the unit triangle, 4 for the unit square or tetrahedron (below (2.33))
 	       Kinv: the inverse permeability tensor pulled back via PK transform, [0,0] component
 		     if 'closure[cl] == cone[c]' and [0,1] otherwise
-	       E2  : area of 'closure[cl]'
+
 	     */
 
-	    PetscReal Ehat=1,s=1,Kinv=1,E2=1;
-	    A[col*nA+row] += 2*Ehat/s*Kinv*E2;
+	    PetscReal Ehat=1,s=1,Kinv=1;
+	    A[col*nA+row] += 2*Ehat/s*Kinv*user->V[closure[cl]];
 	  }
 	}
       }
@@ -185,7 +225,6 @@ PetscErrorCode WheelerYotovSystem(DM dm)
 
     /* C = (B.T * A^-1 * B) */
     ierr = FormStencil(&A[0],&B[0],&C[0],nA,nB);CHKERRQ(ierr);
-
 
   }
   PetscFunctionReturn(0);
@@ -222,6 +261,9 @@ int main(int argc, char **argv)
   ierr = DMPlexInterpolate(dm,&dmDist);CHKERRQ(ierr);
   if (dmDist) { ierr = DMDestroy(&dm);CHKERRQ(ierr); dm = dmDist; }
 
+  AppCtx user;
+  ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
+
   // Setup the section, 1 dof per cell
   PetscSection sec;
   PetscInt     p,pStart,pEnd;
@@ -245,8 +287,9 @@ int main(int argc, char **argv)
   ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
   ierr = PetscObjectSetName((PetscObject)U,"RE.");CHKERRQ(ierr);
 
-  ierr = WheelerYotovSystem(dm);CHKERRQ(ierr);
+  ierr = WheelerYotovSystem(dm,&user);CHKERRQ(ierr);
 
+  ierr = AppCtxDestroy(&user);CHKERRQ(ierr);
   ierr = VecDestroy(&U);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = PetscFinalize();CHKERRQ(ierr);
