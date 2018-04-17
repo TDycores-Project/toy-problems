@@ -10,7 +10,46 @@ https://doi.org/10.1137/050638473
 
 typedef struct {
   PetscReal *V;
+  PetscScalar *K;
+  PetscQuadrature q;
 } AppCtx;
+
+/*
+  There will need to be a quadrature for each element type in the
+  mesh. Neither is this dim independent. It could be generalized to
+  simply use as locations the vertices of the reference element.
+ */
+#undef __FUNCT__
+#define __FUNCT__ "PetscDTWheelerYotovQuadrature"
+PetscErrorCode PetscDTWheelerYotovQuadrature(DM dm,AppCtx *user)
+{
+  PetscFunctionBegin;
+  PetscErrorCode ierr;
+  ierr = PetscQuadratureCreate(PETSC_COMM_SELF,&(user->q));CHKERRQ(ierr);
+  PetscInt dim=2,nq=4;
+  PetscReal *x,*w;
+  ierr = PetscMalloc1(nq*dim,&x);CHKERRQ(ierr);
+  ierr = PetscMalloc1(nq    ,&w);CHKERRQ(ierr);
+  x[0] = -1.0; x[1] = -1.0;
+  x[2] =  1.0; x[3] = -1.0;
+  x[4] = -1.0; x[5] =  1.0;
+  x[6] =  1.0; x[7] =  1.0;
+  w[0] = 0.25; w[1] = 0.25; w[2] = 0.25; w[3] = 0.25;
+  ierr = PetscQuadratureSetData(user->q,dim,1,nq,x,w);CHKERRQ(ierr);
+
+  /*
+  ierr = DMPlexGetHeightStratum(dm,0,&pStart,&pEnd);CHKERRQ(ierr);
+  for(p=pStart;p<pEnd;p++){
+    printf("cell %d:\n",p);
+    PetscReal v[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
+    ierr = DMPlexComputeCellGeometryFEM(dm,p,q,v,DF,DFinv,J);CHKERRQ(ierr);
+    for(i=0;i<nq;i++){
+      printf("   x  =  [%+f, %+f]\n   v  =  [%+f, %+f]\n   DF = [[%+f, %+f],\n         [%+f, %+f]]\n   J  = %f\n\n",x[i*dim],x[i*dim+1],v[i*dim],v[i*dim+1],DF[i*dim*dim],DF[i*dim*dim+1],DF[i*dim*dim+2],DF[i*dim*dim+3],J[i]);
+    }
+  }
+  */
+  PetscFunctionReturn(0);
+}
 
 #undef __FUNCT__
 #define __FUNCT__ "AppCtxCreate"
@@ -28,6 +67,9 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
     if((p >= vStart) && (p < vEnd)) continue;
     ierr = DMPlexComputeCellGeometryFVM(dm,p,&(user->V[p]),dummy,dummy);CHKERRQ(ierr);
   }
+  ierr = PetscMalloc(4*sizeof(PetscReal),&(user->K));CHKERRQ(ierr);
+  user->K[0] = 5;  user->K[2] = 1;
+  user->K[1] = 1;  user->K[3] = 2;
   PetscFunctionReturn(0);
 }
 
@@ -39,6 +81,20 @@ PetscErrorCode AppCtxDestroy(AppCtx *user)
   PetscErrorCode ierr;
   ierr = PetscFree(user->V);CHKERRQ(ierr);
   PetscFunctionReturn(0);
+}
+
+void PrintMatrix(PetscScalar *A,PetscInt nr,PetscInt nc)
+{
+  PetscInt i,j;
+  printf("[");
+  for(i=0;i<nr;i++){
+    printf(" [");
+    for(j=0;j<nc;j++){
+      printf("%+f  ",A[j*nr+i]);
+    }
+    printf("]\n");
+  }
+  printf("]\n");
 }
 
 #undef __FUNCT__
@@ -55,7 +111,7 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,PetscInt
 
   PetscFunctionBegin;
   PetscErrorCode ierr;
-
+  
   PetscBLASInt q,r,info,*pivots;
   ierr = PetscBLASIntCast(qq,&q);CHKERRQ(ierr);
   ierr = PetscBLASIntCast(rr,&r);CHKERRQ(ierr);
@@ -83,6 +139,46 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,PetscInt
 }
 
 #undef __FUNCT__
+#define __FUNCT__ "Pullback"
+PetscErrorCode Pullback(PetscScalar *K,PetscScalar *DFinv,PetscScalar *Kappa,PetscScalar J,PetscInt nn)
+{
+  /*
+    Kappa = J^2  DF^-1 DF^-1 K (DF^-1)^T (DF^-1)^T
+    returns Kappa^-1
+   */
+
+  PetscFunctionBegin;
+  PetscErrorCode ierr;
+
+  PetscScalar  zero=0,one=1,J2=J*J;
+  PetscBLASInt n,lwork=nn*nn;
+  ierr = PetscBLASIntCast(nn,&n);CHKERRQ(ierr);
+  PetscBLASInt info,*pivots;
+  ierr = PetscMalloc((n+1)*sizeof(PetscBLASInt),&pivots);CHKERRQ(ierr);
+
+  // DFinv is row major, so we multiply the transpose to get
+  // DFinv^2. But now DFinv2 is column major. Kappa is also assumed
+  // column major but should be symmetric.
+  PetscScalar DFinv2[n*n],KDFinv2T[n*n],work[n*n]; 
+  BLASgemm_("T","T",&n,&n,&n,&one,DFinv,&n,DFinv,&n,&zero,DFinv2,&n);
+  BLASgemm_("T","T",&n,&n,&n,&one,K     ,&n,DFinv2  ,&n,&zero,KDFinv2T ,&n);
+  BLASgemm_("N","N",&n,&n,&n,&J2 ,DFinv2,&n,KDFinv2T,&n,&zero,&Kappa[0],&n);
+
+  // Find LU factors of Kappa
+  LAPACKgetrf_(&n,&n,&Kappa[0],&n,pivots,&info);
+  if (info<0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"Bad argument to LU factorization");
+  if (info>0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_MAT_LU_ZRPVT,"Bad LU factorization");
+
+  // Find inverse
+  LAPACKgetri_(&n,&Kappa[0],&n,pivots,work,&lwork,&info);
+  if (info<0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"illegal argument value");
+  if (info>0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_MAT_LU_ZRPVT,"singular matrix");
+
+  ierr = PetscFree(pivots);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
 #define __FUNCT__ "WheelerYotovSystem"
 PetscErrorCode WheelerYotovSystem(DM dm,AppCtx *user)
 {
@@ -102,7 +198,7 @@ PetscErrorCode WheelerYotovSystem(DM dm,AppCtx *user)
      global system for pressure. */
   for(v=vStart;v<vEnd;v++){
 
-    if (v != 6) continue; // temporary, just so we look only at the middle vertex
+    if (v != 8) continue; // temporary, just so we look only at the middle vertex
 
     /* The square matrix A comes from the LHS of (2.41) and is of size
        of the number of faces connected to the vertex. The matrix B
@@ -170,7 +266,7 @@ PetscErrorCode WheelerYotovSystem(DM dm,AppCtx *user)
 	/* Assemble contributions into B as per (2.49). The 1/2 and
 	   |e1| terms will be moved/canceled into A. */
 	if (s==0){
-	  B[col*nA+row] =  1; // ij --> [j*nrow + i]
+	  B[col*nA+row] =  1; // ij --> [j*nrow + i], column major for LAPACK
 	}else{
 	  B[col*nA+row] = -1;
 	}
@@ -207,16 +303,38 @@ PetscErrorCode WheelerYotovSystem(DM dm,AppCtx *user)
 	    }
 
 	    /* Assemble contributions into A as per (2.48).
+	       
+	       I am not going to bother making this general at this
+	       point as it is most assuredly not how we will do it in
+	       the end. We have 
 
-	       Ehat: the area of cell 'support[s]' in the reference domain.
-	       s   : 3 for the unit triangle, 4 for the unit square or tetrahedron (below (2.33))
-	       Kinv: the inverse permeability tensor pulled back via PK transform, [0,0] component
-		     if 'closure[cl] == cone[c]' and [0,1] otherwise
+  	         Kappa = J DF^-1 Khat (DF^-1)^T 
+
+	       where
+
+	         Khat = J DF^-1 K (DF^-1)^T 
+
+	       It only appears to be mapped twice. The apparent second
+	       mapping is from pulling back vectors q and v in (K^-1
+	       q,v). So we need to:
+	       
+	       1) locate which quadrature point on this element maps
+	       to the vertex v, in this case they are all the same so
+	       just use the first one.
+	       2) evaluate the Jacobian (DF) and its inverse/determinant
+	       3) transform this element's permeability tensor and then invert it
+               4) if closure[cl] == cone[c], then Kinv = Kappa^-1 [0,0] else Kappa^-1 [0,1]
 
 	     */
-
-	    PetscReal Ehat=1,s=1,Kinv=1;
-	    A[col*nA+row] += 2*Ehat/s*Kinv*user->V[closure[cl]];
+	    PetscReal Ehat = 2;         // area of ref element ( [-1,1] x [-1,1] )
+	    PetscReal wgt  = 1./4;      // 1/s from the paper
+	    PetscInt  dim  = 2, nq = 4; // again, in the end won't be constants
+	    PetscScalar v[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
+	    ierr = DMPlexComputeCellGeometryFEM(dm,support[s],user->q,v,DF,DFinv,J);CHKERRQ(ierr);
+	    PetscScalar Kappa[dim*dim];
+	    ierr = Pullback(user->K,DFinv,Kappa,J[0],2);CHKERRQ(ierr);
+	    PetscReal Kinv = (closure[cl] == cone[c]) ? Kappa[0] : Kappa[2];
+	    A[col*nA+row] += 2*Ehat*wgt*Kinv*user->V[closure[cl]];
 	  }
 	}
       }
@@ -226,6 +344,8 @@ PetscErrorCode WheelerYotovSystem(DM dm,AppCtx *user)
     /* C = (B.T * A^-1 * B) */
     ierr = FormStencil(&A[0],&B[0],&C[0],nA,nB);CHKERRQ(ierr);
 
+    /* C would be assembled into a system in terms of the pressure */
+    
   }
   PetscFunctionReturn(0);
 }
@@ -250,7 +370,11 @@ int main(int argc, char **argv)
 
   // Create the mesh
   DM        dm,dmDist;
-  ierr = DMPlexCreateExodusFromFile(comm,filename,PETSC_TRUE,&dm);CHKERRQ(ierr);
+  const PetscInt  faces[2] = {2,2};
+  const PetscReal lower[2] = {-0.5,-0.5};
+  const PetscReal upper[2] = {+0.5,+0.5};
+  ierr = DMPlexCreateBoxMesh(PETSC_COMM_WORLD,2,PETSC_FALSE,faces,lower,upper,NULL,PETSC_TRUE,&dm);
+    //ierr = DMPlexCreateExodusFromFile(comm,filename,PETSC_TRUE,&dm);CHKERRQ(ierr);
   ierr = DMSetFromOptions(dm);CHKERRQ(ierr);
 
   // Tell the DM how degrees of freedom interact
@@ -261,8 +385,10 @@ int main(int argc, char **argv)
   ierr = DMPlexInterpolate(dm,&dmDist);CHKERRQ(ierr);
   if (dmDist) { ierr = DMDestroy(&dm);CHKERRQ(ierr); dm = dmDist; }
 
+    
   AppCtx user;
   ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
+  ierr = PetscDTWheelerYotovQuadrature(dm,&user);CHKERRQ(ierr);
 
   // Setup the section, 1 dof per cell
   PetscSection sec;
