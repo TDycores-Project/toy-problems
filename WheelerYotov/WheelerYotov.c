@@ -88,11 +88,12 @@ void PrintMatrix(PetscScalar *A,PetscInt nr,PetscInt nc)
   PetscInt i,j;
   printf("[");
   for(i=0;i<nr;i++){
-    printf(" [");
+    printf("  [");
     for(j=0;j<nc;j++){
       printf("%+f  ",A[j*nr+i]);
     }
-    printf("]\n");
+    printf("]");
+    if(i<nr-1) printf("\n");
   }
   printf("]\n");
 }
@@ -132,8 +133,9 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,PetscInt
 
   // Compute (B.T * AinvB)
   PetscScalar zero = 0,one = 1;
-  BLASgemm_("T","N",&r,&r,&q,&one,B,&r,AinvB,&q,&zero,&C[0],&r);
 
+  BLASgemm_("T","N",&r,&r,&q,&one,B,&q,AinvB,&q,&zero,&C[0],&r);
+  
   ierr = PetscFree(pivots);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -149,7 +151,7 @@ PetscErrorCode Pullback(PetscScalar *K,PetscScalar *DFinv,PetscScalar *Kappa,Pet
 
   PetscFunctionBegin;
   PetscErrorCode ierr;
-
+  
   PetscScalar  zero=0,one=1,J2=J*J;
   PetscBLASInt n,lwork=nn*nn;
   ierr = PetscBLASIntCast(nn,&n);CHKERRQ(ierr);
@@ -160,7 +162,7 @@ PetscErrorCode Pullback(PetscScalar *K,PetscScalar *DFinv,PetscScalar *Kappa,Pet
   // DFinv^2. But now DFinv2 is column major. Kappa is also assumed
   // column major but should be symmetric.
   PetscScalar DFinv2[n*n],KDFinv2T[n*n],work[n*n]; 
-  BLASgemm_("T","T",&n,&n,&n,&one,DFinv,&n,DFinv,&n,&zero,DFinv2,&n);
+  BLASgemm_("T","T",&n,&n,&n,&one,DFinv ,&n,DFinv   ,&n,&zero,DFinv2   ,&n);
   BLASgemm_("T","T",&n,&n,&n,&one,K     ,&n,DFinv2  ,&n,&zero,KDFinv2T ,&n);
   BLASgemm_("N","N",&n,&n,&n,&J2 ,DFinv2,&n,KDFinv2T,&n,&zero,&Kappa[0],&n);
 
@@ -180,7 +182,7 @@ PetscErrorCode Pullback(PetscScalar *K,PetscScalar *DFinv,PetscScalar *Kappa,Pet
 
 #undef __FUNCT__
 #define __FUNCT__ "WheelerYotovSystem"
-PetscErrorCode WheelerYotovSystem(DM dm,AppCtx *user)
+PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 {
   PetscFunctionBegin;
   PetscErrorCode ierr;
@@ -198,7 +200,7 @@ PetscErrorCode WheelerYotovSystem(DM dm,AppCtx *user)
      global system for pressure. */
   for(v=vStart;v<vEnd;v++){
 
-    if (v != 8) continue; // temporary, just so we look only at the middle vertex
+    //if (v != 8) continue; // temporary, just so we look only at the middle vertex
 
     /* The square matrix A comes from the LHS of (2.41) and is of size
        of the number of faces connected to the vertex. The matrix B
@@ -343,9 +345,8 @@ PetscErrorCode WheelerYotovSystem(DM dm,AppCtx *user)
 
     /* C = (B.T * A^-1 * B) */
     ierr = FormStencil(&A[0],&B[0],&C[0],nA,nB);CHKERRQ(ierr);
-
-    /* C would be assembled into a system in terms of the pressure */
-    
+    ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);
+  
   }
   PetscFunctionReturn(0);
 }
@@ -379,12 +380,11 @@ int main(int argc, char **argv)
 
   // Tell the DM how degrees of freedom interact
   ierr = DMPlexSetAdjacencyUseCone(dm,PETSC_TRUE);CHKERRQ(ierr);
-  ierr = DMPlexSetAdjacencyUseClosure(dm,PETSC_TRUE);CHKERRQ(ierr);
+  ierr = DMPlexSetAdjacencyUseClosure(dm,PETSC_FALSE);CHKERRQ(ierr);
 
   // Distribute the mesh
   ierr = DMPlexInterpolate(dm,&dmDist);CHKERRQ(ierr);
   if (dmDist) { ierr = DMDestroy(&dm);CHKERRQ(ierr); dm = dmDist; }
-
     
   AppCtx user;
   ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
@@ -408,15 +408,17 @@ int main(int argc, char **argv)
   ierr = DMSetDefaultSection(dm,sec);CHKERRQ(ierr);
   ierr = PetscSectionDestroy(&sec);CHKERRQ(ierr);
 
-  // Create a vec for the initial condition (constant pressure)
-  Vec U;
+  Mat K;
+  Vec U,F;
   ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
-  ierr = PetscObjectSetName((PetscObject)U,"RE.");CHKERRQ(ierr);
-
-  ierr = WheelerYotovSystem(dm,&user);CHKERRQ(ierr);
+  ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);
+  ierr = DMCreateMatrix      (dm,&K);CHKERRQ(ierr);
+  ierr = WheelerYotovSystem(dm,K,F,&user);CHKERRQ(ierr);
 
   ierr = AppCtxDestroy(&user);CHKERRQ(ierr);
+  ierr = MatDestroy(&K);CHKERRQ(ierr);
   ierr = VecDestroy(&U);CHKERRQ(ierr);
+  ierr = VecDestroy(&F);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = PetscFinalize();CHKERRQ(ierr);
   return(0);
