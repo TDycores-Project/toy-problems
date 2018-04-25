@@ -9,10 +9,19 @@ https://doi.org/10.1137/050638473
 #include <petscblaslapack.h>
 
 typedef struct {
-  PetscReal *V;
+  PetscReal *V,*X;
   PetscScalar *K;
   PetscQuadrature q;
 } AppCtx;
+
+PetscReal Pressure(PetscReal x,PetscReal y)
+{
+  PetscReal val;
+  val  = PetscPowReal(1-x,4);
+  val += PetscPowReal(1-y,3)*(1-x);
+  val += PetscSinReal(1-y)*PetscCosReal(1-x);
+  return val;
+}
 
 /*
   There will need to be a quadrature for each element type in the
@@ -57,15 +66,16 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
 {
   PetscFunctionBegin;
   PetscErrorCode ierr;
-  PetscInt       p,pStart,pEnd;
+  PetscInt       p,pStart,pEnd,dim=2;
   PetscInt         vStart,vEnd;
   PetscReal      dummy[3];
   ierr = DMPlexGetChart(dm,&pStart,&pEnd);CHKERRQ(ierr);
   ierr = DMPlexGetDepthStratum(dm,0,&vStart,&vEnd);CHKERRQ(ierr);
-  ierr = PetscMalloc((pEnd-pStart)*sizeof(PetscReal),&(user->V));CHKERRQ(ierr);
+  ierr = PetscMalloc(    (pEnd-pStart)*sizeof(PetscReal),&(user->V));CHKERRQ(ierr);
+  ierr = PetscMalloc(dim*(pEnd-pStart)*sizeof(PetscReal),&(user->X));CHKERRQ(ierr);
   for(p=pStart;p<pEnd;p++){
     if((p >= vStart) && (p < vEnd)) continue;
-    ierr = DMPlexComputeCellGeometryFVM(dm,p,&(user->V[p]),dummy,dummy);CHKERRQ(ierr);
+    ierr = DMPlexComputeCellGeometryFVM(dm,p,&(user->V[p]),&(user->X[p*dim]),dummy);CHKERRQ(ierr);
   }
   ierr = PetscMalloc(4*sizeof(PetscReal),&(user->K));CHKERRQ(ierr);
   user->K[0] = 5;  user->K[2] = 1;
@@ -80,6 +90,7 @@ PetscErrorCode AppCtxDestroy(AppCtx *user)
   PetscFunctionBegin;
   PetscErrorCode ierr;
   ierr = PetscFree(user->V);CHKERRQ(ierr);
+  ierr = PetscFree(user->X);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -190,6 +201,7 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
   PetscInt v,vStart,vEnd; // bounds of depth  = 0
   PetscInt   fStart,fEnd; // bounds of height = 1
   PetscInt   cStart,cEnd; // bounds of height = 0
+  PetscInt dim = 2;
   ierr = DMPlexGetDepthStratum (dm,0,&vStart,&vEnd);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm,1,&fStart,&fEnd);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
@@ -328,9 +340,9 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
                4) if closure[cl] == cone[c], then Kinv = Kappa^-1 [0,0] else Kappa^-1 [0,1]
 
 	     */
-	    PetscReal Ehat = 2;         // area of ref element ( [-1,1] x [-1,1] )
-	    PetscReal wgt  = 1./4;      // 1/s from the paper
-	    PetscInt  dim  = 2, nq = 4; // again, in the end won't be constants
+	    PetscReal Ehat = 2;     // area of ref element ( [-1,1] x [-1,1] )
+	    PetscReal wgt  = 1./4;  // 1/s from the paper
+	    PetscInt  nq    = 4;    // again, in the end won't be constants
 	    PetscScalar v[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
 	    ierr = DMPlexComputeCellGeometryFEM(dm,support[s],user->q,v,DF,DFinv,J);CHKERRQ(ierr);
 	    PetscScalar Kappa[dim*dim];
@@ -346,8 +358,30 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
     /* C = (B.T * A^-1 * B) */
     ierr = FormStencil(&A[0],&B[0],&C[0],nA,nB);CHKERRQ(ierr);
     ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);
-  
+
+    /* I don't really know if this is the right way to set the
+       boundary conditions, it is just what I would typically do in a
+       FEM code. */
+    DMLabel  label;
+    PetscInt value;
+    ierr = DMGetLabelByNum(dm,2,&label);CHKERRQ(ierr); 
+    for(i=0;i<nB;i++){
+      ierr = DMLabelGetValue(label,Bmap[i],&value);CHKERRQ(ierr);
+      if(value == 1){
+	printf("[%f %f] %f\n",
+	       user->X[Bmap[i]*dim],
+	       user->X[Bmap[i]*dim+1],
+	       Pressure(user->X[Bmap[i]*dim],user->X[Bmap[i]*dim+1]));
+
+      }
+    }
+    
   }
+
+  /* */
+  
+  ierr = MatAssemblyBegin(K,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+  ierr = MatAssemblyEnd  (K,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -370,21 +404,39 @@ int main(int argc, char **argv)
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
   // Create the mesh
-  DM        dm,dmDist;
-  const PetscInt  faces[2] = {2,2};
-  const PetscReal lower[2] = {-0.5,-0.5};
-  const PetscReal upper[2] = {+0.5,+0.5};
-  ierr = DMPlexCreateBoxMesh(PETSC_COMM_WORLD,2,PETSC_FALSE,faces,lower,upper,NULL,PETSC_TRUE,&dm);
-    //ierr = DMPlexCreateExodusFromFile(comm,filename,PETSC_TRUE,&dm);CHKERRQ(ierr);
+  DM        dm;
+  const PetscInt  faces[2] = {8,8};
+  const PetscReal lower[2] = {0.0,0.0};
+  const PetscReal upper[2] = {1.0,1.0};
+  ierr = DMPlexCreateBoxMesh(PETSC_COMM_WORLD,2,PETSC_FALSE,faces,lower,upper,NULL,PETSC_TRUE,&dm);CHKERRQ(ierr);
+
+  // Perturbed interior vertices from figure 5
+  DMLabel      label;
+  Vec          coordinates;
+  PetscSection coordSection;
+  PetscScalar *coords;
+  PetscInt     v,vStart,vEnd,offset,value;
+  ierr = DMGetLabelByNum(dm,2,&label);CHKERRQ(ierr); // this is the 'marker' label which marks boundary entities
+  ierr = DMGetCoordinateSection(dm, &coordSection);CHKERRQ(ierr);
+  ierr = DMGetCoordinatesLocal(dm, &coordinates);CHKERRQ(ierr);
+  ierr = DMPlexGetDepthStratum(dm, 0, &vStart, &vEnd);CHKERRQ(ierr);
+  ierr = VecGetArray(coordinates,&coords);CHKERRQ(ierr);
+  for(v=vStart;v<vEnd;v++){
+    ierr = PetscSectionGetOffset(coordSection,v,&offset);CHKERRQ(ierr);
+    ierr = DMLabelGetValue(label,v,&value);CHKERRQ(ierr);
+    if(value==-1){
+      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*0.0589; // h*sqrt(2)/3
+      PetscReal t = ((PetscReal)rand())/((PetscReal)RAND_MAX)*PETSC_PI;
+      coords[offset  ] += r*PetscCosReal(t);
+      coords[offset+1] += r*PetscSinReal(t);
+    }
+  }
+  ierr = VecRestoreArray(coordinates,&coords);CHKERRQ(ierr);
   ierr = DMSetFromOptions(dm);CHKERRQ(ierr);
 
   // Tell the DM how degrees of freedom interact
-  ierr = DMPlexSetAdjacencyUseCone(dm,PETSC_TRUE);CHKERRQ(ierr);
-  ierr = DMPlexSetAdjacencyUseClosure(dm,PETSC_FALSE);CHKERRQ(ierr);
-
-  // Distribute the mesh
-  ierr = DMPlexInterpolate(dm,&dmDist);CHKERRQ(ierr);
-  if (dmDist) { ierr = DMDestroy(&dm);CHKERRQ(ierr); dm = dmDist; }
+  ierr = DMPlexSetAdjacencyUseCone(dm,PETSC_FALSE);CHKERRQ(ierr);
+  ierr = DMPlexSetAdjacencyUseClosure(dm,PETSC_TRUE);CHKERRQ(ierr);
     
   AppCtx user;
   ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
@@ -413,6 +465,7 @@ int main(int argc, char **argv)
   ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
   ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);
   ierr = DMCreateMatrix      (dm,&K);CHKERRQ(ierr);
+  //ierr = MatSetOption(K, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);CHKERRQ(ierr);
   ierr = WheelerYotovSystem(dm,K,F,&user);CHKERRQ(ierr);
 
   ierr = AppCtxDestroy(&user);CHKERRQ(ierr);
