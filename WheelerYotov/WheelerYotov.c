@@ -433,10 +433,7 @@ int main(int argc, char **argv)
   }
   ierr = VecRestoreArray(coordinates,&coords);CHKERRQ(ierr);
   ierr = DMSetFromOptions(dm);CHKERRQ(ierr);
-
-  // Tell the DM how degrees of freedom interact
-  ierr = DMPlexSetAdjacencyUseCone(dm,PETSC_FALSE);CHKERRQ(ierr);
-  ierr = DMPlexSetAdjacencyUseClosure(dm,PETSC_TRUE);CHKERRQ(ierr);
+  ierr = DMViewFromOptions(dm, NULL, "-dm_view");CHKERRQ(ierr);
     
   AppCtx user;
   ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
@@ -458,13 +455,19 @@ int main(int argc, char **argv)
   }
   ierr = PetscSectionSetUp(sec);CHKERRQ(ierr);
   ierr = DMSetDefaultSection(dm,sec);CHKERRQ(ierr);
+  ierr = PetscSectionViewFromOptions(sec, NULL, "-layout_view");CHKERRQ(ierr);
   ierr = PetscSectionDestroy(&sec);CHKERRQ(ierr);
+
+  // Tell the DM how degrees of freedom interact
+  ierr = DMPlexSetAdjacencyUseCone(dm,PETSC_TRUE);CHKERRQ(ierr);
+  ierr = DMPlexSetAdjacencyUseClosure(dm,PETSC_TRUE);CHKERRQ(ierr);
 
   Mat K;
   Vec U,F;
   ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
   ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);
   ierr = DMCreateMatrix      (dm,&K);CHKERRQ(ierr);
+  ierr = MatViewFromOptions(K, NULL, "-sys_view");CHKERRQ(ierr);
   //ierr = MatSetOption(K, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);CHKERRQ(ierr);
   ierr = WheelerYotovSystem(dm,K,F,&user);CHKERRQ(ierr);
 
