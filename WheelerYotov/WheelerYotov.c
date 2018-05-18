@@ -9,7 +9,8 @@ https://doi.org/10.1137/050638473
 #include <petscblaslapack.h>
 
 typedef struct {
-  PetscReal *V,*X;
+  PetscInt  *bc;
+  PetscReal *V,*X,*N,*g;
   PetscScalar *K;
   PetscQuadrature q;
 } AppCtx;
@@ -45,18 +46,6 @@ PetscErrorCode PetscDTWheelerYotovQuadrature(DM dm,AppCtx *user)
   x[6] =  1.0; x[7] =  1.0;
   w[0] = 0.25; w[1] = 0.25; w[2] = 0.25; w[3] = 0.25;
   ierr = PetscQuadratureSetData(user->q,dim,1,nq,x,w);CHKERRQ(ierr);
-
-  /*
-  ierr = DMPlexGetHeightStratum(dm,0,&pStart,&pEnd);CHKERRQ(ierr);
-  for(p=pStart;p<pEnd;p++){
-    printf("cell %d:\n",p);
-    PetscReal v[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
-    ierr = DMPlexComputeCellGeometryFEM(dm,p,q,v,DF,DFinv,J);CHKERRQ(ierr);
-    for(i=0;i<nq;i++){
-      printf("   x  =  [%+f, %+f]\n   v  =  [%+f, %+f]\n   DF = [[%+f, %+f],\n         [%+f, %+f]]\n   J  = %f\n\n",x[i*dim],x[i*dim+1],v[i*dim],v[i*dim+1],DF[i*dim*dim],DF[i*dim*dim+1],DF[i*dim*dim+2],DF[i*dim*dim+3],J[i]);
-    }
-  }
-  */
   PetscFunctionReturn(0);
 }
 
@@ -68,18 +57,52 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
   PetscErrorCode ierr;
   PetscInt       p,pStart,pEnd,dim=2;
   PetscInt         vStart,vEnd;
-  PetscReal      dummy[3];
+  //PetscReal      dummy[3];
   ierr = DMPlexGetChart(dm,&pStart,&pEnd);CHKERRQ(ierr);
   ierr = DMPlexGetDepthStratum(dm,0,&vStart,&vEnd);CHKERRQ(ierr);
-  ierr = PetscMalloc(    (pEnd-pStart)*sizeof(PetscReal),&(user->V));CHKERRQ(ierr);
-  ierr = PetscMalloc(dim*(pEnd-pStart)*sizeof(PetscReal),&(user->X));CHKERRQ(ierr);
+  ierr = PetscMalloc(    (pEnd-pStart)*sizeof(PetscReal),&(user->V ));CHKERRQ(ierr);
+  ierr = PetscMalloc(    (pEnd-pStart)*sizeof(PetscReal),&(user->g ));CHKERRQ(ierr);
+  ierr = PetscMalloc(    (pEnd-pStart)*sizeof(PetscInt ),&(user->bc));CHKERRQ(ierr);
+  ierr = PetscMalloc(dim*(pEnd-pStart)*sizeof(PetscReal),&(user->X ));CHKERRQ(ierr);
+  ierr = PetscMalloc(dim*(pEnd-pStart)*sizeof(PetscReal),&(user->N ));CHKERRQ(ierr);
+  
+  // Compute geometry
   for(p=pStart;p<pEnd;p++){
     if((p >= vStart) && (p < vEnd)) continue;
-    ierr = DMPlexComputeCellGeometryFVM(dm,p,&(user->V[p]),&(user->X[p*dim]),dummy);CHKERRQ(ierr);
+    ierr = DMPlexComputeCellGeometryFVM(dm,p,&(user->V[p]),&(user->X[p*dim]),&(user->N[p*dim]));CHKERRQ(ierr);
   }
+
+  // Global permeability tensor
   ierr = PetscMalloc(4*sizeof(PetscReal),&(user->K));CHKERRQ(ierr);
   user->K[0] = 5;  user->K[2] = 1;
   user->K[1] = 1;  user->K[3] = 2;
+
+  // Populate Dirichlet conditions
+  ierr = DMPlexGetHeightStratum(dm,0,&pStart,&pEnd);CHKERRQ(ierr);
+  for(p=pStart;p<pEnd;p++){
+
+    /* initialize */
+    user->bc[p-pStart] = 0;
+    user->g [p-pStart] = 0;
+    
+    /* faces connected to this cell */
+    PetscInt c,coneSize;
+    const PetscInt *cone;
+    ierr = DMPlexGetConeSize(dm,p,&coneSize);CHKERRQ(ierr);
+    ierr = DMPlexGetCone    (dm,p,&cone    );CHKERRQ(ierr);
+    for(c=0;c<coneSize;c++){
+      
+      /* how many cells are connected to this face */
+      PetscInt supportSize;
+      ierr = DMPlexGetSupportSize(dm,cone[c],&supportSize);CHKERRQ(ierr);
+      if ((supportSize == 1) && (user->bc[p-pStart] == 0)) {
+	/* this is a boundary cell */
+	user->bc[p-pStart] = 1;
+	user->g [p-pStart] = Pressure(user->X[p*dim  ],
+				      user->X[p*dim+1]);
+      }
+    }
+  }  
   PetscFunctionReturn(0);
 }
 
@@ -89,8 +112,11 @@ PetscErrorCode AppCtxDestroy(AppCtx *user)
 {
   PetscFunctionBegin;
   PetscErrorCode ierr;
-  ierr = PetscFree(user->V);CHKERRQ(ierr);
-  ierr = PetscFree(user->X);CHKERRQ(ierr);
+  ierr = PetscFree(user->V );CHKERRQ(ierr);
+  ierr = PetscFree(user->X );CHKERRQ(ierr);
+  ierr = PetscFree(user->g );CHKERRQ(ierr);
+  ierr = PetscFree(user->bc);CHKERRQ(ierr);
+  ierr = PetscFree(user->K );CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -278,17 +304,15 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	}
 
 	/* Assemble contributions into B as per (2.49). The 1/2 and
-	   |e1| terms will be moved/canceled into A. */
-	if (s==0){
-	  if (supportSize == 1) {
-	    B[col*nA+row] =  Pressure(user->X[support[0]*dim  ],
-				      user->X[support[0]*dim+1]);
-	  }else{
-	    B[col*nA+row] =  1; // ij --> [j*nrow + i], column major for LAPACK
-	  }
-	}else{
-	  B[col*nA+row] = -1;
-	}
+	   |e1| terms will be moved/canceled into A. We adopt the
+	   convention that positive quantities are assembled when the
+	   face centroid points away from the cell centroid. */
+	PetscReal dir,val=1;
+	if (user->bc[support[s]] == 1) val = user->g[support[s]];
+	dir  = (user->X[support[s]*dim  ]-user->X[closure[cl]*dim  ])*user->N[closure[cl]*dim  ];
+	dir += (user->X[support[s]*dim+1]-user->X[closure[cl]*dim+1])*user->N[closure[cl]*dim+1];
+	if(dir > 0) val *= -1;
+	B[col*nA+row] = val; // ij --> [j*nrow + i], column major for LAPACK
 
 	/* To assemble A we then need the faces connected to this cell
 	   which we can get from the cone, but only if the original
@@ -345,9 +369,9 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
                4) if closure[cl] == cone[c], then Kinv = Kappa^-1 [0,0] else Kappa^-1 [0,1]
 
 	     */
-	    PetscReal Ehat = 2;     // area of ref element ( [-1,1] x [-1,1] )
-	    PetscReal wgt  = 1./4;  // 1/s from the paper
-	    PetscInt  nq    = 4;    // again, in the end won't be constants
+	    PetscReal Ehat = 2;    // area of ref element ( [-1,1] x [-1,1] )
+	    PetscReal wgt  = 1./4; // 1/s from the paper
+	    PetscInt  nq   = 4;    // again, in the end won't be constants
 	    PetscScalar v[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
 	    ierr = DMPlexComputeCellGeometryFEM(dm,support[s],user->q,v,DF,DFinv,J);CHKERRQ(ierr);
 	    PetscScalar Kappa[dim*dim];
@@ -359,15 +383,34 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
       }
     }
     ierr = DMPlexRestoreTransitiveClosure(dm,v,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);
-
+    
     /* C = (B.T * A^-1 * B) */
     ierr = FormStencil(&A[0],&B[0],&C[0],nA,nB);CHKERRQ(ierr);
-    ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);
-    
-  }
 
-  /* */
+    /* Adjust local matrix for Dirichlet boundary conditions */
+    for(i=0;i<nB;i++){
+      if(user->bc[Bmap[i]]==0) continue;
+      ierr = VecSetValues(F,nB,&Bmap[0],&C[i*nB],ADD_VALUES);CHKERRQ(ierr);
+      for(j=0;j<nB;j++){
+	C[j*nB+i] = C[i*nB+j] = 0;
+      }
+    }
+    ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);   
+  }
+  ierr = VecScale(F,-1.0);CHKERRQ(ierr); /* Dirichlet contributions should have been subtracted */
+  ierr = MatAssemblyBegin(K,MAT_FLUSH_ASSEMBLY);CHKERRQ(ierr);
+  ierr = MatAssemblyEnd  (K,MAT_FLUSH_ASSEMBLY);CHKERRQ(ierr);
+   
+  /* Finalize Dirichlet conditions */
+  for(v=cStart;v<cEnd;v++){
+    if (user->bc[v-cStart]==1) {
+      ierr = MatSetValue(K,v,v,1.0,INSERT_VALUES);CHKERRQ(ierr);
+      ierr = VecSetValue(F,v,user->g[v-cStart],INSERT_VALUES);CHKERRQ(ierr);
+    }
+  }
   
+  ierr = VecAssemblyBegin(F);CHKERRQ(ierr);
+  ierr = VecAssemblyEnd  (F);CHKERRQ(ierr);
   ierr = MatAssemblyBegin(K,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   ierr = MatAssemblyEnd  (K,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -393,7 +436,7 @@ int main(int argc, char **argv)
 
   // Create the mesh
   DM        dm;
-  const PetscInt  faces[2] = {8,8};
+  const PetscInt  faces[2] = {3  ,3  };
   const PetscReal lower[2] = {0.0,0.0};
   const PetscReal upper[2] = {1.0,1.0};
   ierr = DMPlexCreateBoxMesh(PETSC_COMM_WORLD,2,PETSC_FALSE,faces,lower,upper,NULL,PETSC_TRUE,&dm);CHKERRQ(ierr);
@@ -413,7 +456,7 @@ int main(int argc, char **argv)
     ierr = PetscSectionGetOffset(coordSection,v,&offset);CHKERRQ(ierr);
     ierr = DMLabelGetValue(label,v,&value);CHKERRQ(ierr);
     if(value==-1){
-      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*0.0589; // h*sqrt(2)/3
+      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*0.0; //0.0589; // h*sqrt(2)/3
       PetscReal t = ((PetscReal)rand())/((PetscReal)RAND_MAX)*PETSC_PI;
       coords[offset  ] += r*PetscCosReal(t);
       coords[offset+1] += r*PetscSinReal(t);
@@ -421,8 +464,7 @@ int main(int argc, char **argv)
   }
   ierr = VecRestoreArray(coordinates,&coords);CHKERRQ(ierr);
   ierr = DMSetFromOptions(dm);CHKERRQ(ierr);
-  ierr = DMViewFromOptions(dm, NULL, "-dm_view");CHKERRQ(ierr);
-    
+  
   AppCtx user;
   ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
   ierr = PetscDTWheelerYotovQuadrature(dm,&user);CHKERRQ(ierr);
