@@ -280,7 +280,12 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	/* Assemble contributions into B as per (2.49). The 1/2 and
 	   |e1| terms will be moved/canceled into A. */
 	if (s==0){
-	  B[col*nA+row] =  1; // ij --> [j*nrow + i], column major for LAPACK
+	  if (supportSize == 1) {
+	    B[col*nA+row] =  Pressure(user->X[support[0]*dim  ],
+				      user->X[support[0]*dim+1]);
+	  }else{
+	    B[col*nA+row] =  1; // ij --> [j*nrow + i], column major for LAPACK
+	  }
 	}else{
 	  B[col*nA+row] = -1;
 	}
@@ -358,23 +363,6 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
     /* C = (B.T * A^-1 * B) */
     ierr = FormStencil(&A[0],&B[0],&C[0],nA,nB);CHKERRQ(ierr);
     ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);
-
-    /* I don't really know if this is the right way to set the
-       boundary conditions, it is just what I would typically do in a
-       FEM code. */
-    DMLabel  label;
-    PetscInt value;
-    ierr = DMGetLabelByNum(dm,2,&label);CHKERRQ(ierr); 
-    for(i=0;i<nB;i++){
-      ierr = DMLabelGetValue(label,Bmap[i],&value);CHKERRQ(ierr);
-      if(value == 1){
-	printf("[%f %f] %f\n",
-	       user->X[Bmap[i]*dim],
-	       user->X[Bmap[i]*dim+1],
-	       Pressure(user->X[Bmap[i]*dim],user->X[Bmap[i]*dim+1]));
-
-      }
-    }
     
   }
 
@@ -468,8 +456,14 @@ int main(int argc, char **argv)
   ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);
   ierr = DMCreateMatrix      (dm,&K);CHKERRQ(ierr);
   ierr = MatViewFromOptions(K, NULL, "-sys_view");CHKERRQ(ierr);
-  //ierr = MatSetOption(K, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);CHKERRQ(ierr);
   ierr = WheelerYotovSystem(dm,K,F,&user);CHKERRQ(ierr);
+
+  KSP ksp;
+  ierr = KSPCreate(PETSC_COMM_WORLD,&ksp);CHKERRQ(ierr);
+  ierr = KSPSetOperators(ksp,K,K);CHKERRQ(ierr);
+  ierr = KSPSetFromOptions(ksp);CHKERRQ(ierr);
+  ierr = KSPSetUp(ksp);CHKERRQ(ierr);
+  ierr = KSPSolve(ksp,F,U);CHKERRQ(ierr);
 
   ierr = AppCtxDestroy(&user);CHKERRQ(ierr);
   ierr = MatDestroy(&K);CHKERRQ(ierr);
