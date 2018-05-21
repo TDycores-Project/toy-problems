@@ -369,11 +369,11 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
                4) if closure[cl] == cone[c], then Kinv = Kappa^-1 [0,0] else Kappa^-1 [0,1]
 
 	     */
-	    PetscReal Ehat = 2;    // area of ref element ( [-1,1] x [-1,1] )
+	    PetscReal Ehat = 4;    // area of ref element ( [-1,1] x [-1,1] )
 	    PetscReal wgt  = 1./4; // 1/s from the paper
 	    PetscInt  nq   = 4;    // again, in the end won't be constants
-	    PetscScalar v[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
-	    ierr = DMPlexComputeCellGeometryFEM(dm,support[s],user->q,v,DF,DFinv,J);CHKERRQ(ierr);
+	    PetscScalar vv[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
+	    ierr = DMPlexComputeCellGeometryFEM(dm,support[s],user->q,vv,DF,DFinv,J);CHKERRQ(ierr);
 	    PetscScalar Kappa[dim*dim];
 	    ierr = Pullback(user->K,DFinv,Kappa,J[0],2);CHKERRQ(ierr);
 	    PetscReal Kinv = (closure[cl] == cone[c]) ? Kappa[0] : Kappa[2];
