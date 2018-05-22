@@ -24,6 +24,24 @@ PetscReal Pressure(PetscReal x,PetscReal y)
   return val;
 }
 
+PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
+{
+  PetscFunctionBegin;
+  PetscErrorCode ierr;
+  PetscScalar *u,L2;
+  PetscInt c,cStart,cEnd;
+  ierr = VecGetArray(U,&u);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
+  L2 = 0.;
+  for(c=cStart;c<cEnd;c++){
+    //printf("%f %f\n",u[c-cStart],Pressure(user->X[c*2],user->X[c*2+1]));
+    L2 += PetscSqr(u[c-cStart]-Pressure(user->X[c*2],user->X[c*2+1]));
+  }
+  printf("%e\n",1./PetscSqrtReal(cEnd-cStart)*PetscSqrtReal(L2));
+  ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 /*
   There will need to be a quadrature for each element type in the
   mesh. Neither is this dim independent. It could be generalized to
@@ -127,9 +145,9 @@ void PrintMatrix(PetscScalar *A,PetscInt nr,PetscInt nc)
   for(i=0;i<nr;i++){
     printf("  [");
     for(j=0;j<nc;j++){
-      printf("%+f  ",A[j*nr+i]);
+      printf("%+f, ",A[j*nr+i]);
     }
-    printf("]");
+    printf("],");
     if(i<nr-1) printf("\n");
   }
   printf("]\n");
@@ -137,7 +155,9 @@ void PrintMatrix(PetscScalar *A,PetscInt nr,PetscInt nc)
 
 #undef __FUNCT__
 #define __FUNCT__ "FormStencil"
-PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,PetscInt qq,PetscInt rr)
+PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,
+			   PetscScalar *G,PetscScalar *D,
+			   PetscInt qq,PetscInt rr)
 {
   // Given block matrices of the form:
   //
@@ -150,7 +170,7 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,PetscInt
   PetscFunctionBegin;
   PetscErrorCode ierr;
   
-  PetscBLASInt q,r,info,*pivots;
+  PetscBLASInt q,r,o=1,info,*pivots;
   ierr = PetscBLASIntCast(qq,&q);CHKERRQ(ierr);
   ierr = PetscBLASIntCast(rr,&r);CHKERRQ(ierr);
   ierr = PetscMalloc((q+1)*sizeof(PetscBLASInt),&pivots);CHKERRQ(ierr);
@@ -168,10 +188,16 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,PetscInt
   LAPACKgetrs_("N",&q,&r,A,&q,pivots,AinvB,&q,&info);
   if (info) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"GETRS - Bad solve");
 
-  // Compute (B.T * AinvB)
+  // Solve (A^-1 * G) by back-substitution, stored in G
+  LAPACKgetrs_("N",&q,&o,A,&q,pivots,G,&q,&info);
+  if (info) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"GETRS - Bad solve");
+  
+  // Compute (B.T * AinvB) and (B.T * G)
   PetscScalar zero = 0,one = 1;
+  BLASgemm_("T","N",&r,&r,&q,&one,B,&q,AinvB,&q,&zero,&C[0],&r); // B.T * AinvB
 
-  BLASgemm_("T","N",&r,&r,&q,&one,B,&q,AinvB,&q,&zero,&C[0],&r);
+  // B.T (rxq) * G (q)
+  BLASgemm_("T","N",&r,&o,&q,&one,B,&q,G    ,&q,&zero,&D[0],&r); // B.T * G
   
   ierr = PetscFree(pivots);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -252,10 +278,12 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
       if ((closure[cl] >= fStart) && (closure[cl] < fEnd)) nA += 1;
       if ((closure[cl] >= cStart) && (closure[cl] < cEnd)) nB += 1;
     }
-    PetscScalar A[nA*nA],B[nA*nB],C[nB*nB];
+    PetscScalar A[nA*nA],B[nA*nB],C[nB*nB],G[nA],D[nA];
     PetscMemzero(A,sizeof(PetscScalar)*nA*nA);
     PetscMemzero(B,sizeof(PetscScalar)*nA*nB);
     PetscMemzero(C,sizeof(PetscScalar)*nB*nB);
+    PetscMemzero(G,sizeof(PetscScalar)*nA   );
+    PetscMemzero(D,sizeof(PetscScalar)*nB   );
 
     /* In order to assemble A and B, we need to have a local
        mapping. */
@@ -307,13 +335,17 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	   |e1| terms will be moved/canceled into A. We adopt the
 	   convention that positive quantities are assembled when the
 	   face centroid points away from the cell centroid. */
-	PetscReal dir,val=1;
-	if (user->bc[support[s]] == 1) val = user->g[support[s]];
+	PetscReal dir,val = 1;
 	dir  = (user->X[support[s]*dim  ]-user->X[closure[cl]*dim  ])*user->N[closure[cl]*dim  ];
 	dir += (user->X[support[s]*dim+1]-user->X[closure[cl]*dim+1])*user->N[closure[cl]*dim+1];
 	if(dir > 0) val *= -1;
-	B[col*nA+row] = val; // ij --> [j*nrow + i], column major for LAPACK
+	B[col*nA+row] = -val; // ij --> [j*nrow + i], column major for LAPACK
 
+	/* Assemble Dirichlet boundary conditions into G */
+	if (supportSize == 1){
+	  if (user->bc[support[s]] == 1) G[row] = dir < 0 ? -user->g[support[s]] : user->g[support[s]];
+	}
+      
 	/* To assemble A we then need the faces connected to this cell
 	   which we can get from the cone, but only if the original
 	   vertex v is also connected, which requires the closure. */
@@ -383,32 +415,22 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
       }
     }
     ierr = DMPlexRestoreTransitiveClosure(dm,v,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);
-    
-    /* C = (B.T * A^-1 * B) */
-    ierr = FormStencil(&A[0],&B[0],&C[0],nA,nB);CHKERRQ(ierr);
 
-    /* Adjust local matrix for Dirichlet boundary conditions */
-    for(i=0;i<nB;i++){
-      if(user->bc[Bmap[i]]==0) continue;
-      ierr = VecSetValues(F,nB,&Bmap[0],&C[i*nB],ADD_VALUES);CHKERRQ(ierr);
-      for(j=0;j<nB;j++){
-	C[j*nB+i] = C[i*nB+j] = 0;
-      }
-    }
+    /* if((v-vStart)==2){ */
+    /*   PrintMatrix(A,nA,nA); */
+    /*   PrintMatrix(B,nA,nB); */
+    /*   PrintMatrix(G,nA,1); */
+    /* }     */
+    /* C = (B.T * A^-1 * B) */
+    ierr = FormStencil(&A[0],&B[0],&C[0],&G[0],&D[0],nA,nB);CHKERRQ(ierr);
+    /* if((v-vStart)==2){ */
+    /*   PrintMatrix(C,nB,nB); */
+    /*   PrintMatrix(D,nB,1); */
+    /* }     */
+    
+    ierr = VecSetValues(F,nB,&Bmap[0],            &D[0],ADD_VALUES);CHKERRQ(ierr);   
     ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);   
   }
-  ierr = VecScale(F,-1.0);CHKERRQ(ierr); /* Dirichlet contributions should have been subtracted */
-  ierr = MatAssemblyBegin(K,MAT_FLUSH_ASSEMBLY);CHKERRQ(ierr);
-  ierr = MatAssemblyEnd  (K,MAT_FLUSH_ASSEMBLY);CHKERRQ(ierr);
-   
-  /* Finalize Dirichlet conditions */
-  for(v=cStart;v<cEnd;v++){
-    if (user->bc[v-cStart]==1) {
-      ierr = MatSetValue(K,v,v,1.0,INSERT_VALUES);CHKERRQ(ierr);
-      ierr = VecSetValue(F,v,user->g[v-cStart],INSERT_VALUES);CHKERRQ(ierr);
-    }
-  }
-  
   ierr = VecAssemblyBegin(F);CHKERRQ(ierr);
   ierr = VecAssemblyEnd  (F);CHKERRQ(ierr);
   ierr = MatAssemblyBegin(K,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
@@ -507,6 +529,8 @@ int main(int argc, char **argv)
   ierr = KSPSetUp(ksp);CHKERRQ(ierr);
   ierr = KSPSolve(ksp,F,U);CHKERRQ(ierr);
 
+  L2Error(dm,U,&user);
+  
   ierr = AppCtxDestroy(&user);CHKERRQ(ierr);
   ierr = MatDestroy(&K);CHKERRQ(ierr);
   ierr = VecDestroy(&U);CHKERRQ(ierr);
