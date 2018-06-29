@@ -264,8 +264,6 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
      global system for pressure. */
   for(v=vStart;v<vEnd;v++){
 
-    //if (v != 8) continue; // temporary, just so we look only at the middle vertex
-
     /* The square matrix A comes from the LHS of (2.41) and is of size
        of the number of faces connected to the vertex. The matrix B
        comes from the RHS of (2.41) and is of size (number of
@@ -403,12 +401,29 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	     */
 	    PetscReal Ehat = 4;    // area of ref element ( [-1,1] x [-1,1] )
 	    PetscReal wgt  = 1./4; // 1/s from the paper
-	    PetscInt  nq   = 4;    // again, in the end won't be constants
+	    PetscInt  nq = 4;    // again, in the end won't be constants
 	    PetscScalar vv[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
 	    ierr = DMPlexComputeCellGeometryFEM(dm,support[s],user->q,vv,DF,DFinv,J);CHKERRQ(ierr);
-	    PetscScalar Kappa[dim*dim];
+	    PetscScalar Kappa[dim*dim],Kinv;
 	    ierr = Pullback(user->K,DFinv,Kappa,J[0],2);CHKERRQ(ierr);
-	    PetscReal Kinv = (closure[cl] == cone[c]) ? Kappa[0] : Kappa[2];
+
+	    PetscScalar n1[dim],n2[dim],mag;
+	    /* terrible, just making it work for now. */
+	    n1[0] = user->X[closure[cl]*dim  ]-user->X[support[s]*dim  ];
+	    n1[1] = user->X[closure[cl]*dim+1]-user->X[support[s]*dim+1];
+	    mag   = PetscSqrtScalar(n1[0]*n1[0]+n1[1]*n1[1]);
+	    n1[0] /= mag; n1[1] /= mag;
+
+	    n2[0] = user->X[cone[c]*dim  ]-user->X[support[s]*dim  ];
+	    n2[1] = user->X[cone[c]*dim+1]-user->X[support[s]*dim+1];
+	    mag   = PetscSqrtScalar(n2[0]*n2[0]+n2[1]*n2[1]);
+	    n2[0] /= mag; n2[1] /= mag;
+	    
+	    Kinv  = (Kappa[0]*n1[0] + Kappa[1]*n1[1])*n2[0];
+	    Kinv += (Kappa[2]*n1[0] + Kappa[3]*n1[1])*n2[1];
+	    
+	    printf("%d %d %d %d [%+.0f, %+.0f] [%+.0f, %+.0f] %f\n",v,closure[cl],cone[c],support[s],n1[0],n1[1],n2[0],n2[1],Kinv);
+
 	    A[col*nA+row] += 2*Ehat*wgt*Kinv*user->V[closure[cl]];
 	  }
 	}
@@ -486,10 +501,10 @@ int main(int argc, char **argv)
   }
   ierr = VecRestoreArray(coordinates,&coords);CHKERRQ(ierr);
   ierr = DMSetFromOptions(dm);CHKERRQ(ierr);
-  
+
   AppCtx user;
   ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
-  ierr = PetscDTWheelerYotovQuadrature(dm,&user);CHKERRQ(ierr);
+  ierr = PetscDTWheelerYotovQuadrature(dm,&user);CHKERRQ(ierr);  
 
   // Setup the section, 1 dof per cell
   PetscSection sec;
