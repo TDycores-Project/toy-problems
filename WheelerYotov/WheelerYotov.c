@@ -1,4 +1,5 @@
 static char help[] = "";
+#define __DEBUG__
 
 /*
 Mary F. Wheeler and Ivan Yotov, 'A Multipoint Flux Mixed Finite
@@ -264,6 +265,12 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
      global system for pressure. */
   for(v=vStart;v<vEnd;v++){
 
+#ifdef __DEBUG__
+    
+    printf("Vertex %2d ---------------------\n",v);
+
+#endif
+
     /* The square matrix A comes from the LHS of (2.41) and is of size
        of the number of faces connected to the vertex. The matrix B
        comes from the RHS of (2.41) and is of size (number of
@@ -302,6 +309,10 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
     for (cl = 0; cl < closureSize*2; cl += 2) {
       if ((closure[cl] < fStart) || (closure[cl] >= fEnd)) continue;
 
+#ifdef __DEBUG__
+	printf("  Face %2d\n",closure[cl]);
+#endif
+
       /* Find the row into which information from this face will be
 	 assembled. */
       row = -1;
@@ -318,6 +329,10 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
       ierr = DMPlexGetSupportSize(dm,closure[cl],&supportSize);CHKERRQ(ierr);
       ierr = DMPlexGetSupport    (dm,closure[cl],&support    );CHKERRQ(ierr);
       for (s=0;s<supportSize;s++){
+
+#ifdef __DEBUG__
+	printf("    Cell %2d\n",support[s]);
+#endif
 
 	/* Find the column into which information from this cell will
 	   be assembled into B. */
@@ -365,6 +380,10 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	  ierr = DMPlexRestoreTransitiveClosure(dm,cone[c],PETSC_TRUE,&closureSize2,&closure2);CHKERRQ(ierr);
 	  if (found) {
 
+#ifdef __DEBUG__
+	    printf("      Face %d\n",cone[c]);
+#endif
+
 	    /* This face corresponds to the column in the local
 	       system. Find the local index. */
 	    col = -1;
@@ -396,12 +415,11 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	       just use the first one.
 	       2) evaluate the Jacobian (DF) and its inverse/determinant
 	       3) transform this element's permeability tensor and then invert it
-               4) if closure[cl] == cone[c], then Kinv = Kappa^-1 [0,0] else Kappa^-1 [0,1]
 
 	     */
 	    PetscReal Ehat = 4;    // area of ref element ( [-1,1] x [-1,1] )
 	    PetscReal wgt  = 1./4; // 1/s from the paper
-	    PetscInt  nq = 4;    // again, in the end won't be constants
+	    PetscInt  nq   = 4;    // again, in the end won't be constants
 	    PetscScalar vv[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
 	    ierr = DMPlexComputeCellGeometryFEM(dm,support[s],user->q,vv,DF,DFinv,J);CHKERRQ(ierr);
 	    PetscScalar Kappa[dim*dim],Kinv;
@@ -421,22 +439,25 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	    
 	    Kinv  = (Kappa[0]*n1[0] + Kappa[1]*n1[1])*n2[0];
 	    Kinv += (Kappa[2]*n1[0] + Kappa[3]*n1[1])*n2[1];
-	    
-	    printf("%d %d %d %d [%+.0f, %+.0f] [%+.0f, %+.0f] %f\n",v,closure[cl],cone[c],support[s],n1[0],n1[1],n2[0],n2[1],Kinv);
 
-	    A[col*nA+row] += 2*Ehat*wgt*Kinv*user->V[closure[cl]];
+#ifdef __DEBUG__
+	    printf("A[%2d,%2d] = %+.6f\n",row,col,Kinv);
+#endif	 
+	    //printf("%d %d %d %d [%+.0f, %+.0f] [%+.0f, %+.0f] %f\n",v,closure[cl],cone[c],support[s],n1[0],n1[1],n2[0],n2[1],Kinv);
+
+	    A[col*nA+row] += 2*Ehat*wgt*PetscAbsReal(Kinv)*user->V[closure[cl]];
 	  }
 	}
       }
     }
     ierr = DMPlexRestoreTransitiveClosure(dm,v,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);
 
-    /* if((v-vStart)==2){ */
-    /*   PrintMatrix(A,nA,nA); */
-    /*   PrintMatrix(B,nA,nB); */
-    /*   PrintMatrix(G,nA,1); */
-    /* }     */
-    /* C = (B.T * A^-1 * B) */
+    if((v-vStart)==5){
+      PrintMatrix(A,nA,nA);
+      PrintMatrix(B,nA,nB);
+      PrintMatrix(G,nA,1);
+    }
+    //C = (B.T * A^-1 * B)
     ierr = FormStencil(&A[0],&B[0],&C[0],&G[0],&D[0],nA,nB);CHKERRQ(ierr);
     /* if((v-vStart)==2){ */
     /*   PrintMatrix(C,nB,nB); */
