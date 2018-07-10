@@ -1,5 +1,5 @@
 static char help[] = "";
-#define __DEBUG__
+//#define __DEBUG__
 
 /*
 Mary F. Wheeler and Ivan Yotov, 'A Multipoint Flux Mixed Finite
@@ -16,6 +16,7 @@ typedef struct {
   PetscQuadrature q;
 } AppCtx;
 
+/* Exact pressure field given in paper in section 5, page 2103 */
 PetscReal Pressure(PetscReal x,PetscReal y)
 {
   PetscReal val;
@@ -25,6 +26,7 @@ PetscReal Pressure(PetscReal x,PetscReal y)
   return val;
 }
 
+/* Norm of the pressure field given in Remark 4.1 */
 PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
 {
   PetscFunctionBegin;
@@ -33,12 +35,16 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
   PetscInt c,cStart,cEnd;
   ierr = VecGetArray(U,&u);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
+
+  PetscSection section;
+  PetscInt offset;
+  ierr = DMGetDefaultSection(dm, &section);CHKERRQ(ierr);
   L2 = 0.;
   for(c=cStart;c<cEnd;c++){
-    //printf("%f %f\n",u[c-cStart],Pressure(user->X[c*2],user->X[c*2+1]));
-    L2 += PetscSqr(u[c-cStart]-Pressure(user->X[c*2],user->X[c*2+1]));
+    ierr = PetscSectionGetOffset(section,c,&offset);CHKERRQ(ierr);
+    L2  += user->V[c]*PetscSqr(u[offset]-Pressure(user->X[(c-cStart)*2],user->X[(c-cStart)*2+1]));
   }
-  printf("%e\n",1./PetscSqrtReal(cEnd-cStart)*PetscSqrtReal(L2));
+  printf("%e\n",PetscSqrtReal(L2));
   ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -76,7 +82,6 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
   PetscErrorCode ierr;
   PetscInt       p,pStart,pEnd,dim=2;
   PetscInt         vStart,vEnd;
-  //PetscReal      dummy[3];
   ierr = DMPlexGetChart(dm,&pStart,&pEnd);CHKERRQ(ierr);
   ierr = DMPlexGetDepthStratum(dm,0,&vStart,&vEnd);CHKERRQ(ierr);
   ierr = PetscMalloc(    (pEnd-pStart)*sizeof(PetscReal),&(user->V ));CHKERRQ(ierr);
@@ -91,7 +96,7 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
     ierr = DMPlexComputeCellGeometryFVM(dm,p,&(user->V[p]),&(user->X[p*dim]),&(user->N[p*dim]));CHKERRQ(ierr);
   }
 
-  // Global permeability tensor
+  // Globally constant permeability tensor, given in section 5
   ierr = PetscMalloc(4*sizeof(PetscReal),&(user->K));CHKERRQ(ierr);
   user->K[0] = 5;  user->K[2] = 1;
   user->K[1] = 1;  user->K[3] = 2;
@@ -139,6 +144,7 @@ PetscErrorCode AppCtxDestroy(AppCtx *user)
   PetscFunctionReturn(0);
 }
 
+/* Just to help debug */
 void PrintMatrix(PetscScalar *A,PetscInt nr,PetscInt nc)
 {
   PetscInt i,j;
@@ -209,27 +215,23 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,
 PetscErrorCode Pullback(PetscScalar *K,PetscScalar *DFinv,PetscScalar *Kappa,PetscScalar J,PetscInt nn)
 {
   /*
-    Kappa = J^2  DF^-1 DF^-1 K (DF^-1)^T (DF^-1)^T
-    returns Kappa^-1
+    Kappa = J DF^-1 K (DF^-1)^T
+    returns Kappa^-1 in column major format
    */
 
   PetscFunctionBegin;
   PetscErrorCode ierr;
   
-  PetscScalar  zero=0,one=1,J2=J*J;
+  PetscScalar  zero=0,one=1;
   PetscBLASInt n,lwork=nn*nn;
   ierr = PetscBLASIntCast(nn,&n);CHKERRQ(ierr);
   PetscBLASInt info,*pivots;
   ierr = PetscMalloc((n+1)*sizeof(PetscBLASInt),&pivots);CHKERRQ(ierr);
 
-  // DFinv is row major, so we multiply the transpose to get
-  // DFinv^2. But now DFinv2 is column major. Kappa is also assumed
-  // column major but should be symmetric.
-  PetscScalar DFinv2[n*n],KDFinv2T[n*n],work[n*n]; 
-  BLASgemm_("T","T",&n,&n,&n,&one,DFinv ,&n,DFinv   ,&n,&zero,DFinv2   ,&n);
-  BLASgemm_("T","T",&n,&n,&n,&one,K     ,&n,DFinv2  ,&n,&zero,KDFinv2T ,&n);
-  BLASgemm_("N","N",&n,&n,&n,&J2 ,DFinv2,&n,KDFinv2T,&n,&zero,&Kappa[0],&n);
-
+  PetscScalar KDFinvT[n*n],work[n*n];
+  BLASgemm_("N","N",&n,&n,&n,&one,K    ,&n,DFinv  ,&n,&zero,KDFinvT  ,&n); // KDFinvT is now column major
+  BLASgemm_("T","N",&n,&n,&n,&J  ,DFinv,&n,KDFinvT,&n,&zero,&Kappa[0],&n); // Kappa is column major
+  
   // Find LU factors of Kappa
   LAPACKgetrf_(&n,&n,&Kappa[0],&n,pivots,&info);
   if (info<0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"Bad argument to LU factorization");
@@ -264,11 +266,9 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
      solution of this problem is a stencil which we assemble into the
      global system for pressure. */
   for(v=vStart;v<vEnd;v++){
-
-#ifdef __DEBUG__
     
+#ifdef __DEBUG__
     printf("Vertex %2d ---------------------\n",v);
-
 #endif
 
     /* The square matrix A comes from the LHS of (2.41) and is of size
@@ -283,6 +283,8 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
       if ((closure[cl] >= fStart) && (closure[cl] < fEnd)) nA += 1;
       if ((closure[cl] >= cStart) && (closure[cl] < cEnd)) nB += 1;
     }
+    
+    /* Space for block matrices */
     PetscScalar A[nA*nA],B[nA*nB],C[nB*nB],G[nA],D[nA];
     PetscMemzero(A,sizeof(PetscScalar)*nA*nA);
     PetscMemzero(B,sizeof(PetscScalar)*nA*nB);
@@ -354,7 +356,7 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	if(dir > 0) val *= -1;
 	B[col*nA+row] = -val; // ij --> [j*nrow + i], column major for LAPACK
 
-	/* Assemble Dirichlet boundary conditions into G */
+	/* Assemble Dirichlet boundary conditions into G (2.50) */
 	if (supportSize == 1){
 	  if (user->bc[support[s]] == 1) G[row] = dir < 0 ? -user->g[support[s]] : user->g[support[s]];
 	}
@@ -396,74 +398,90 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 
 	    /* Assemble contributions into A as per (2.48).
 	       
-	       I am not going to bother making this general at this
-	       point as it is most assuredly not how we will do it in
-	       the end. We have 
-
-  	         Kappa = J DF^-1 Khat (DF^-1)^T 
-
-	       where
-
-	         Khat = J DF^-1 K (DF^-1)^T 
-
-	       It only appears to be mapped twice. The apparent second
-	       mapping is from pulling back vectors q and v in (K^-1
-	       q,v). So we need to:
-	       
 	       1) locate which quadrature point on this element maps
-	       to the vertex v, in this case they are all the same so
-	       just use the first one.
+	       to the vertex v
 	       2) evaluate the Jacobian (DF) and its inverse/determinant
 	       3) transform this element's permeability tensor and then invert it
+	       4) choose the component of the tensor that is active
+	       based on the mapped element outward normals
 
-	     */
+	    */
 	    PetscReal Ehat = 4;    // area of ref element ( [-1,1] x [-1,1] )
 	    PetscReal wgt  = 1./4; // 1/s from the paper
-	    PetscInt  nq   = 4;    // again, in the end won't be constants
+	    PetscInt  q,nq = 4;    // again, in the end won't be constants
 	    PetscScalar vv[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
 	    ierr = DMPlexComputeCellGeometryFEM(dm,support[s],user->q,vv,DF,DFinv,J);CHKERRQ(ierr);
-	    PetscScalar Kappa[dim*dim],Kinv;
-	    ierr = Pullback(user->K,DFinv,Kappa,J[0],2);CHKERRQ(ierr);
-
-	    PetscScalar n1[dim],n2[dim],mag;
-	    /* terrible, just making it work for now. */
-	    n1[0] = user->X[closure[cl]*dim  ]-user->X[support[s]*dim  ];
-	    n1[1] = user->X[closure[cl]*dim+1]-user->X[support[s]*dim+1];
-	    mag   = PetscSqrtScalar(n1[0]*n1[0]+n1[1]*n1[1]);
-	    n1[0] /= mag; n1[1] /= mag;
-
-	    n2[0] = user->X[cone[c]*dim  ]-user->X[support[s]*dim  ];
-	    n2[1] = user->X[cone[c]*dim+1]-user->X[support[s]*dim+1];
-	    mag   = PetscSqrtScalar(n2[0]*n2[0]+n2[1]*n2[1]);
-	    n2[0] /= mag; n2[1] /= mag;
 	    
-	    Kinv  = (Kappa[0]*n1[0] + Kappa[1]*n1[1])*n2[0];
-	    Kinv += (Kappa[2]*n1[0] + Kappa[3]*n1[1])*n2[1];
+	    for(q=0;q<nq;q++){
+	      
+	      // Is this the right quadrature point?
+	      if ((PetscAbsReal(vv[q*dim  ]-user->X[v*dim  ]) > 1e-12) ||
+		  (PetscAbsReal(vv[q*dim+1]-user->X[v*dim+1]) > 1e-12)) continue;
 
+	      // Pullbacks
+	      PetscScalar Kappa[dim*dim],Kinv;
+	      ierr = Pullback(user->K,&DFinv[dim*dim*q],Kappa,J[q],dim);CHKERRQ(ierr);
+	      
+	      // Mapped edge normals, n1 = first face, n2 = second face
+	      PetscScalar n1[dim],n2[dim],tmp[dim],mag;
+	      n1[0] = user->N[closure[cl]*dim  ];
+	      n1[1] = user->N[closure[cl]*dim+1];
+	      n2[0] = user->N[cone   [c ]*dim  ];
+	      n2[1] = user->N[cone   [c ]*dim+1];
+	      
+	      // Flip them: they might point into the element 
+	      if(((user->X[closure[cl]*dim  ]-user->X[support[s]*dim  ])*n1[0]+
+		  (user->X[closure[cl]*dim+1]-user->X[support[s]*dim+1])*n1[1])<0){
+		n1[0] *= -1; n1[1] *= -1;
+	      }
+	      if(((user->X[cone   [c ]*dim  ]-user->X[support[s]*dim  ])*n2[0]+
+		  (user->X[cone   [c ]*dim+1]-user->X[support[s]*dim+1])*n2[1])<0){
+		n2[0] *= -1; n2[1] *= -1;
+	      }
+	      	      
+	      // Map them back to reference and normalize
+	      tmp[0] = DFinv[dim*dim*q  ]*n1[0] + DFinv[dim*dim*q+1]*n1[1];
+	      tmp[1] = DFinv[dim*dim*q+2]*n1[0] + DFinv[dim*dim*q+3]*n1[1];
+	      mag    = PetscSqrtScalar(tmp[0]*tmp[0]+tmp[1]*tmp[1]);
+	      n1 [0] = tmp[0]/mag;
+	      n1 [1] = tmp[1]/mag;
+	      tmp[0] = DFinv[dim*dim*q  ]*n2[0] + DFinv[dim*dim*q+1]*n2[1];
+	      tmp[1] = DFinv[dim*dim*q+2]*n2[0] + DFinv[dim*dim*q+3]*n2[1];
+	      mag    = PetscSqrtScalar(tmp[0]*tmp[0]+tmp[1]*tmp[1]);
+	      n2 [0] = tmp[0]/mag;
+	      n2 [1] = tmp[1]/mag;
+	      
 #ifdef __DEBUG__
-	    printf("A[%2d,%2d] = %+.6f\n",row,col,Kinv);
+	      printf("        n1 = [%f %f], n2 = [%f %f]\n",n1[0],n1[1],n2[0],n2[1]);
+#endif
+	      // Choose the component (Kappa vhat2, vhat1)
+	      Kinv  = (Kappa[0]*n2[0] + Kappa[1]*n2[1])*n1[0];
+	      Kinv += (Kappa[2]*n2[0] + Kappa[3]*n2[1])*n1[1];
+	      
+#ifdef __DEBUG__
+	      printf("        A[%2d,%2d] = %+.6f\n",row,col,Kinv);
 #endif	 
-	    //printf("%d %d %d %d [%+.0f, %+.0f] [%+.0f, %+.0f] %f\n",v,closure[cl],cone[c],support[s],n1[0],n1[1],n2[0],n2[1],Kinv);
 
-	    A[col*nA+row] += 2*Ehat*wgt*PetscAbsReal(Kinv)*user->V[closure[cl]];
+	      // Load into the local system
+	      A[col*nA+row] += 2*Ehat*wgt*Kinv*user->V[closure[cl]];
+	      break;
+	    }
+	    
 	  }
 	}
       }
     }
     ierr = DMPlexRestoreTransitiveClosure(dm,v,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);
 
+#ifdef __DEBUG__    
     if((v-vStart)==5){
       PrintMatrix(A,nA,nA);
       PrintMatrix(B,nA,nB);
       PrintMatrix(G,nA,1);
     }
-    //C = (B.T * A^-1 * B)
-    ierr = FormStencil(&A[0],&B[0],&C[0],&G[0],&D[0],nA,nB);CHKERRQ(ierr);
-    /* if((v-vStart)==2){ */
-    /*   PrintMatrix(C,nB,nB); */
-    /*   PrintMatrix(D,nB,1); */
-    /* }     */
+#endif
     
+    ierr = FormStencil(&A[0],&B[0],&C[0],&G[0],&D[0],nA,nB);CHKERRQ(ierr);    
     ierr = VecSetValues(F,nB,&Bmap[0],            &D[0],ADD_VALUES);CHKERRQ(ierr);   
     ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);   
   }
@@ -494,7 +512,7 @@ int main(int argc, char **argv)
 
   // Create the mesh
   DM        dm;
-  const PetscInt  faces[2] = {3  ,3  };
+  const PetscInt  faces[2] = {3  ,3};
   const PetscReal lower[2] = {0.0,0.0};
   const PetscReal upper[2] = {1.0,1.0};
   ierr = DMPlexCreateBoxMesh(PETSC_COMM_WORLD,2,PETSC_FALSE,faces,lower,upper,NULL,PETSC_TRUE,&dm);CHKERRQ(ierr);
@@ -514,7 +532,7 @@ int main(int argc, char **argv)
     ierr = PetscSectionGetOffset(coordSection,v,&offset);CHKERRQ(ierr);
     ierr = DMLabelGetValue(label,v,&value);CHKERRQ(ierr);
     if(value==-1){
-      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*0.0; //0.0589; // h*sqrt(2)/3
+      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*0.25; //0.0589; // h*sqrt(2)/3
       PetscReal t = ((PetscReal)rand())/((PetscReal)RAND_MAX)*PETSC_PI;
       coords[offset  ] += r*PetscCosReal(t);
       coords[offset+1] += r*PetscSinReal(t);
@@ -527,6 +545,16 @@ int main(int argc, char **argv)
   ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
   ierr = PetscDTWheelerYotovQuadrature(dm,&user);CHKERRQ(ierr);  
 
+  // load vertex locations, this messes up -dm_refine
+  ierr = VecGetArray(coordinates,&coords);CHKERRQ(ierr);
+  for(v=vStart;v<vEnd;v++){
+    ierr = PetscSectionGetOffset(coordSection,v,&offset);CHKERRQ(ierr);
+    user.X[v*2  ] = coords[offset  ];
+    user.X[v*2+1] = coords[offset+1];
+  }
+  ierr = VecRestoreArray(coordinates,&coords);CHKERRQ(ierr);
+  
+  
   // Setup the section, 1 dof per cell
   PetscSection sec;
   PetscInt     p,pStart,pEnd;
