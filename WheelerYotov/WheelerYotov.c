@@ -16,13 +16,55 @@ typedef struct {
   PetscQuadrature q;
 } AppCtx;
 
-/* Exact pressure field given in paper in section 5, page 2103 */
+/* /\* Exact pressure field given in paper in section 5, page 2103 *\/ */
+/* PetscReal Pressure(PetscReal x,PetscReal y) */
+/* { */
+/*   PetscReal val; */
+/*   val  = PetscPowReal(1-x,4); */
+/*   val += PetscPowReal(1-y,3)*(1-x); */
+/*   val += PetscSinReal(1-y)*PetscCosReal(1-x); */
+/*   return val; */
+/* } */
+
+/* /\* f = (nabla . -user->K grad(p)) *\/ */
+/* PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K) */
+/* { */
+/*   // -k11*(12*(-x + 1)**2 + sin(y - 1)*cos(x - 1)) */
+/*   // -k12*( 3*(-y + 1)**2 + sin(x - 1)*cos(y - 1)) */
+/*   // -k21*( 3*(-y + 1)**2 + sin(x - 1)*cos(y - 1)) */
+/*   // -k22*(-3*(-x + 1)*(2*y - 2) + sin(y - 1)*cos(x - 1)) */
+/*   PetscReal val; */
+/*   val  = -K[0]*(12*PetscPowReal(1-x,2)+PetscSinReal(y-1)*PetscCosReal(x-1)); */
+/*   val += -K[1]*( 3*PetscPowReal(1-y,2)+PetscSinReal(x-1)*PetscCosReal(y-1)); */
+/*   val += -K[2]*( 3*PetscPowReal(1-y,2)+PetscSinReal(x-1)*PetscCosReal(y-1)); */
+/*   val += -K[3]*(-6*(1-x)*(y-1)+PetscSinReal(y-1)*PetscCosReal(x-1)); */
+/*   return val; */
+/* } */
+
+
+/* */
 PetscReal Pressure(PetscReal x,PetscReal y)
 {
   PetscReal val;
-  val  = PetscPowReal(1-x,4);
-  val += PetscPowReal(1-y,3)*(1-x);
-  val += PetscSinReal(1-y)*PetscCosReal(1-x);
+  
+  // these are not affected by the permeability tensor nor require a
+  // nonzero forcing, on cartesian mesh
+  //val = 3.14;  // perfect
+  //val = (1-x); // O(h) 
+  //val = (1-y); // O(h) 
+  //val = (1-x)+(1-y); // O(h)
+
+  // requires nonzero forcing, on cartesian mesh
+  val = (1-x)*(1-y); // O(h) 
+  
+  return val;
+}
+
+/* f = (nabla . -user->K grad(p)) */
+PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K)
+{
+  PetscReal val;
+  val = -K[1]-K[2]; // p = (1-x)*(1-y)
   return val;
 }
 
@@ -306,8 +348,9 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
       }
     }
 
-    /* The matrices A and B are formed by looping over the connected
-       faces to the vertex v. */
+    /* The rows of matrices A and B are formed by looping over the
+       connected faces to the vertex v. So we grab the closure and
+       skip all points which fall outside the range of faces. */
     for (cl = 0; cl < closureSize*2; cl += 2) {
       if ((closure[cl] < fStart) || (closure[cl] >= fEnd)) continue;
 
@@ -325,7 +368,8 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	}
       }
 
-      /* We need to get the cells connected to this face. */
+      /* To integrate contributions from this face (test function), we
+	 need to get the cells connected to this face. */
       PetscInt s,supportSize;
       const PetscInt *support;
       ierr = DMPlexGetSupportSize(dm,closure[cl],&supportSize);CHKERRQ(ierr);
@@ -361,9 +405,10 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	  if (user->bc[support[s]] == 1) G[row] = dir < 0 ? -user->g[support[s]] : user->g[support[s]];
 	}
       
-	/* To assemble A we then need the faces connected to this cell
-	   which we can get from the cone, but only if the original
-	   vertex v is also connected, which requires the closure. */
+	/* To assemble the columns of A (trial functions) we then need
+	   the faces connected to this cell which we can get from the
+	   cone, but only if the original vertex v is also connected,
+	   which requires the closure. */
 	PetscInt c,coneSize;
 	const PetscInt *cone;
 	ierr = DMPlexGetConeSize(dm,support[s],&coneSize);CHKERRQ(ierr);
@@ -375,12 +420,12 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	  ierr = DMPlexGetTransitiveClosure(dm,cone[c],PETSC_TRUE,&closureSize2,&closure2);CHKERRQ(ierr);
 	  for (cl2 = 0; cl2 < closureSize2*2; cl2 += 2) {
 	    if (closure2[cl2] == v) {
-	      found = PETSC_TRUE; /* yes the original vertex is in the closure */
+	      found = PETSC_TRUE; 
 	      break;
 	    }
 	  }
 	  ierr = DMPlexRestoreTransitiveClosure(dm,cone[c],PETSC_TRUE,&closureSize2,&closure2);CHKERRQ(ierr);
-	  if (found) {
+	  if (found) { /* yes the original vertex is in the closure */
 
 #ifdef __DEBUG__
 	    printf("      Face %d\n",cone[c]);
@@ -408,61 +453,69 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	    */
 	    PetscReal Ehat = 4;    // area of ref element ( [-1,1] x [-1,1] )
 	    PetscReal wgt  = 1./4; // 1/s from the paper
-	    PetscInt  q,nq = 4;    // again, in the end won't be constants
+	    PetscInt  q,nq = 4;    // in the end won't be a constant
 	    PetscScalar vv[dim*nq],DF[dim*dim*nq],DFinv[dim*dim*nq],J[nq];
 	    ierr = DMPlexComputeCellGeometryFEM(dm,support[s],user->q,vv,DF,DFinv,J);CHKERRQ(ierr);
 	    
 	    for(q=0;q<nq;q++){
 	      
-	      // Is this the right quadrature point?
+	      // Is this the right quadrature point? Does the quad
+	      // point map to the vertex v?
 	      if ((PetscAbsReal(vv[q*dim  ]-user->X[v*dim  ]) > 1e-12) ||
 		  (PetscAbsReal(vv[q*dim+1]-user->X[v*dim+1]) > 1e-12)) continue;
 
-	      // Pullbacks
+	      // Pullback of the permeability tensor
 	      PetscScalar Kappa[dim*dim],Kinv;
 	      ierr = Pullback(user->K,&DFinv[dim*dim*q],Kappa,J[q],dim);CHKERRQ(ierr);
 	      
-	      // Mapped edge normals, n1 = first face, n2 = second face
-	      PetscScalar n1[dim],n2[dim],tmp[dim],mag;
-	      n1[0] = user->N[closure[cl]*dim  ];
+	      // Physical edge normals (could point into the
+	      // element). The velocity at this vertex/edge is the
+	      // scalar u value times this vector.
+	      PetscScalar n1[dim],n2[dim];
+	      n1[0] = user->N[closure[cl]*dim  ]; // corresponds to test function
 	      n1[1] = user->N[closure[cl]*dim+1];
-	      n2[0] = user->N[cone   [c ]*dim  ];
+	      n2[0] = user->N[cone   [c ]*dim  ]; // corresponds to trial function
 	      n2[1] = user->N[cone   [c ]*dim+1];
-	      
-	      // Flip them: they might point into the element 
-	      if(((user->X[closure[cl]*dim  ]-user->X[support[s]*dim  ])*n1[0]+
-		  (user->X[closure[cl]*dim+1]-user->X[support[s]*dim+1])*n1[1])<0){
-		n1[0] *= -1; n1[1] *= -1;
-	      }
-	      if(((user->X[cone   [c ]*dim  ]-user->X[support[s]*dim  ])*n2[0]+
-		  (user->X[cone   [c ]*dim+1]-user->X[support[s]*dim+1])*n2[1])<0){
-		n2[0] *= -1; n2[1] *= -1;
-	      }
 	      	      
-	      // Map them back to reference and normalize
-	      tmp[0] = DFinv[dim*dim*q  ]*n1[0] + DFinv[dim*dim*q+1]*n1[1];
-	      tmp[1] = DFinv[dim*dim*q+2]*n1[0] + DFinv[dim*dim*q+3]*n1[1];
-	      mag    = PetscSqrtScalar(tmp[0]*tmp[0]+tmp[1]*tmp[1]);
-	      n1 [0] = tmp[0]/mag;
-	      n1 [1] = tmp[1]/mag;
-	      tmp[0] = DFinv[dim*dim*q  ]*n2[0] + DFinv[dim*dim*q+1]*n2[1];
-	      tmp[1] = DFinv[dim*dim*q+2]*n2[0] + DFinv[dim*dim*q+3]*n2[1];
-	      mag    = PetscSqrtScalar(tmp[0]*tmp[0]+tmp[1]*tmp[1]);
-	      n2 [0] = tmp[0]/mag;
-	      n2 [1] = tmp[1]/mag;
+	      // What are the reference element-outward normals at
+	      // this point? They will be the physical edge normals
+	      // pulled back, but we might possibly need to flip them
+	      // if they point away from the centroid in physical
+	      // space. (Could just use the quadrature number to hard
+	      // code these instead.)
+	      PetscScalar v1[dim],v2[dim],mag;
 	      
-#ifdef __DEBUG__
-	      printf("        n1 = [%f %f], n2 = [%f %f]\n",n1[0],n1[1],n2[0],n2[1]);
-#endif
+	      // test function in reference element
+	      v1[0] = DFinv[dim*dim*q  ]*n1[0] + DFinv[dim*dim*q+1]*n1[1];
+	      v1[1] = DFinv[dim*dim*q+2]*n1[0] + DFinv[dim*dim*q+3]*n1[1];
+	      mag   = PetscSqrtScalar(v1[0]*v1[0]+v1[1]*v1[1]);
+	      v1[0] = v1[0]/mag;
+	      v1[1] = v1[1]/mag;
+	      if(((user->X[closure[cl]*dim  ]-user->X[support[s]*dim  ])*n1[0]+
+	      	  (user->X[closure[cl]*dim+1]-user->X[support[s]*dim+1])*n1[1])<0){
+		v1[0] *= -1; v1[1] *= -1;
+	      }
+
+	      // trial function in reference element
+	      v2[0] = DFinv[dim*dim*q  ]*n2[0] + DFinv[dim*dim*q+1]*n2[1];
+	      v2[1] = DFinv[dim*dim*q+2]*n2[0] + DFinv[dim*dim*q+3]*n2[1];
+	      mag   = PetscSqrtScalar(v2[0]*v2[0]+v2[1]*v2[1]);
+	      v2[0] = v2[0]/mag;
+	      v2[1] = v2[1]/mag;
+	      if(((user->X[cone   [c ]*dim  ]-user->X[support[s]*dim  ])*n2[0]+
+	      	  (user->X[cone   [c ]*dim+1]-user->X[support[s]*dim+1])*n2[1])<0){
+		v2[0] *= -1; v2[1] *= -1;
+	      }	      
+
 	      // Choose the component (Kappa vhat2, vhat1)
-	      Kinv  = (Kappa[0]*n2[0] + Kappa[1]*n2[1])*n1[0];
-	      Kinv += (Kappa[2]*n2[0] + Kappa[3]*n2[1])*n1[1];
+	      Kinv  = (Kappa[0]*v2[0] + Kappa[1]*v2[1])*v1[0];
+	      Kinv += (Kappa[2]*v2[0] + Kappa[3]*v2[1])*v1[1];
 	      
 #ifdef __DEBUG__
 	      printf("        A[%2d,%2d] = %+.6f\n",row,col,Kinv);
 #endif	 
 
-	      // Load into the local system
+	      // Load into the local system, the 2 is the 1/2 from (2.49)
 	      A[col*nA+row] += 2*Ehat*wgt*Kinv*user->V[closure[cl]];
 	      break;
 	    }
@@ -485,6 +538,14 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
     ierr = VecSetValues(F,nB,&Bmap[0],            &D[0],ADD_VALUES);CHKERRQ(ierr);   
     ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);   
   }
+
+  // Add in the forcing, single quadrature point in the center of the cell
+  PetscInt c;
+  for(c=cStart;c<cEnd;c++){
+    PetscScalar f = Forcing(user->X[c*dim],user->X[c*dim+1],user->K);
+    ierr = VecSetValue(F,c,-f*user->V[c],ADD_VALUES);CHKERRQ(ierr);   
+  }
+  
   ierr = VecAssemblyBegin(F);CHKERRQ(ierr);
   ierr = VecAssemblyEnd  (F);CHKERRQ(ierr);
   ierr = MatAssemblyBegin(K,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
@@ -505,14 +566,16 @@ int main(int argc, char **argv)
   ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
 
   // Options
+  PetscInt N = 8;
   char filename[PETSC_MAX_PATH_LEN] = "../data/simple.e";
   ierr = PetscOptionsBegin(comm,NULL,"Options","");CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-N","Exodus.II filename to read","",N,&N,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsString("-mesh","Exodus.II filename to read","",filename,filename,sizeof(filename),NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
   // Create the mesh
   DM        dm;
-  const PetscInt  faces[2] = {3  ,3};
+  const PetscInt  faces[2] = {N  ,N};
   const PetscReal lower[2] = {0.0,0.0};
   const PetscReal upper[2] = {1.0,1.0};
   ierr = DMPlexCreateBoxMesh(PETSC_COMM_WORLD,2,PETSC_FALSE,faces,lower,upper,NULL,PETSC_TRUE,&dm);CHKERRQ(ierr);
@@ -532,7 +595,7 @@ int main(int argc, char **argv)
     ierr = PetscSectionGetOffset(coordSection,v,&offset);CHKERRQ(ierr);
     ierr = DMLabelGetValue(label,v,&value);CHKERRQ(ierr);
     if(value==-1){
-      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*0.25; //0.0589; // h*sqrt(2)/3
+      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*(0./N*PetscPowReal(2,0.5)/3.); // h*sqrt(2)/3
       PetscReal t = ((PetscReal)rand())/((PetscReal)RAND_MAX)*PETSC_PI;
       coords[offset  ] += r*PetscCosReal(t);
       coords[offset+1] += r*PetscSinReal(t);
@@ -603,3 +666,8 @@ int main(int argc, char **argv)
   ierr = PetscFinalize();CHKERRQ(ierr);
   return(0);
 }
+
+
+// A U + Bt P = G
+// B U        = F
+
