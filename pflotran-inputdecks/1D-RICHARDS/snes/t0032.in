@@ -1,0 +1,164 @@
+!Description! 1D infiltration
+! 1D infiltration in very dry soils. Problem described in Celia et al. (1990)
+! according to equation 13.
+
+SIMULATION
+  SIMULATION_TYPE SUBSURFACE
+  PROCESS_MODELS
+    SUBSURFACE_FLOW flow
+      MODE RICHARDS
+    /
+  /
+END
+
+SUBSURFACE
+
+#=========================== EOS ==============================================
+EOS WATER
+  DENSITY CONSTANT 997.16d0
+  ENTHALPY CONSTANT 1.8890d0
+  VISCOSITY CONSTANT 8.904156d-4
+END
+
+!=========================== discretization ===================================
+GRID
+TYPE structured
+ORIGIN 0.d0 0.d0 0.d0
+NXYZ 1 1 500
+BOUNDS
+0.d0 0.d0 0.d0
+1.d0 1.d0 1.d0
+/
+END
+
+NEWTON_SOLVER FLOW
+NO_PRINT_CONVERGENCE
+END
+
+!=========================== material properties ==============================
+MATERIAL_PROPERTY soil
+ID 1
+POROSITY 0.368
+TORTUOSITY 0.5d0
+SATURATION_FUNCTION default
+PERMEABILITY
+PERM_X 8.3913d-12 
+PERM_Y 8.3913d-12
+PERM_Z 8.3913d-12
+/
+/
+
+#=========================== characteristic curves ============================
+CHARACTERISTIC_CURVES default
+  SATURATION_FUNCTION VAN_GENUCHTEN
+    ALPHA 3.4257d-4
+    M 0.5d0
+    LIQUID_RESIDUAL_SATURATION 0.2772d0
+  /
+  PERMEABILITY_FUNCTION MUALEM_VG_LIQ
+    M 0.5d0
+    LIQUID_RESIDUAL_SATURATION 0.2772d0
+  /
+END
+
+!=========================== saturation functions =============================
+skip
+SATURATION_FUNCTION default
+SATURATION_FUNCTION_TYPE VAN_GENUCHTEN
+RESIDUAL_SATURATION 0.2772d0
+LAMBDA 0.5d0
+ALPHA 3.4257d-4
+/
+noskip
+
+
+!=========================== output options ===================================
+OUTPUT
+FORMAT HDF5
+!PERIODIC TIME 10.d0 s
+/
+
+!=========================== times ============================================
+TIME
+FINAL_TIME 1600.d0 s
+#FINAL_TIME 32.d0 s
+INITIAL_TIMESTEP_SIZE 32.d0 s
+MAXIMUM_TIMESTEP_SIZE 32.d0 s
+/
+
+!=========================== regions ==========================================
+REGION all
+COORDINATES
+0.d0 0.d0 0.d0
+1.d0 1.d0 1.d0
+/
+END
+
+REGION top
+COORDINATES
+0.d0 0.d0 1.d0
+1.d0 1.d0 1.d0
+/
+FACE TOP
+END
+
+REGION bottom
+COORDINATES
+0.d0 0.d0 0.d0
+1.d0 1.d0 0.d0
+/
+FACE BOTTOM
+END
+
+!=========================== flow conditions ==================================
+FLOW_CONDITION initial
+TYPE
+PRESSURE dirichlet
+/
+PRESSURE 3.5355d3
+END
+
+FLOW_CONDITION bottom
+TYPE
+PRESSURE dirichlet
+/
+PRESSURE 3.5355d3
+END
+
+FLOW_CONDITION top
+TYPE
+PRESSURE dirichlet
+/
+PRESSURE 9.3991d4
+END
+
+
+
+!=========================== condition couplers ===============================
+! initial condition
+INITIAL_CONDITION
+FLOW_CONDITION initial
+REGION all
+END
+
+skip
+! top boundary condition
+BOUNDARY_CONDITION
+FLOW_CONDITION top
+REGION top
+END
+
+! bottom boundary condition
+BOUNDARY_CONDITION
+FLOW_CONDITION bottom
+REGION bottom
+END
+noskip
+
+!=========================== stratigraphy couplers ============================
+STRATA
+REGION all
+MATERIAL soil
+END
+
+END_SUBSURFACE
