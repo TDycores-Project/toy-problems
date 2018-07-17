@@ -41,8 +41,6 @@ typedef struct {
 /*   return val; */
 /* } */
 
-
-/* */
 PetscReal Pressure(PetscReal x,PetscReal y)
 {
   PetscReal val;
@@ -55,16 +53,17 @@ PetscReal Pressure(PetscReal x,PetscReal y)
   //val = (1-x)+(1-y); // O(h)
 
   // requires nonzero forcing, on cartesian mesh
-  val = (1-x)*(1-y); // O(h) 
-  
+  val = (1-x)*(2-y); // O(h)
+  //val = (1-x)+(1-y)*x*x;
   return val;
 }
 
 /* f = (nabla . -user->K grad(p)) */
 PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K)
 {
-  PetscReal val;
+  PetscReal val=0;
   val = -K[1]-K[2]; // p = (1-x)*(1-y)
+  //val = 2*K[0]*(y-1) + 2*x*(K[1]+K[2]); // p = (1-x)+(1-y)*x*x;
   return val;
 }
 
@@ -595,7 +594,7 @@ int main(int argc, char **argv)
     ierr = PetscSectionGetOffset(coordSection,v,&offset);CHKERRQ(ierr);
     ierr = DMLabelGetValue(label,v,&value);CHKERRQ(ierr);
     if(value==-1){
-      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*(0./N*PetscPowReal(2,0.5)/3.); // h*sqrt(2)/3
+      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*(1./N*PetscPowReal(2,0.5)/3.); // h*sqrt(2)/3
       PetscReal t = ((PetscReal)rand())/((PetscReal)RAND_MAX)*PETSC_PI;
       coords[offset  ] += r*PetscCosReal(t);
       coords[offset+1] += r*PetscSinReal(t);
