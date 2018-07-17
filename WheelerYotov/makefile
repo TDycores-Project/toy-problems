@@ -5,6 +5,9 @@ all: ${TARGETS}
 WheelerYotov: WheelerYotov.o
 	${CLINKER} -o $@ $^ ${PETSC_LIB}
 
+CreateMat: CreateMat.o
+	${CLINKER} -o $@ $^ ${PETSC_LIB}
+
 clean::
 	${RM} ${TARGETS} *.vtu *.vtk *~
 
