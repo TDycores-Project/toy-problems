@@ -25,8 +25,8 @@ K22  = Constant( 5/9.)
 Kinv = as_matrix((((K11,K12),(K12,K22))))
               
 # Define variational form
-a = (dot(Kinv*u, v) - p*div(v) + div(u)*w)*dx
-L = f*w*dx - g*inner(v,n)*ds
+a = (dot(Kinv*u, v) - p*div(v) - div(u)*w)*dx
+L = -f*w*dx - g*inner(v,n)*ds
 
 # Compute solution
 sol = Function(V)
