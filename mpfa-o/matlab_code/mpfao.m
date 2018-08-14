@@ -3,7 +3,21 @@
 
 load mesh_30x30.mat
 
-%mpfaExample2; close all;
+N_bc_value = 3;
+S_bc_value = 4;
+W_bc_value = 2;
+E_bc_value = 1;
+
+% N_bc_value = 4;
+% S_bc_value = 4;
+% W_bc_value = 4;
+% E_bc_value = 4;
+% 
+% N_bc_value = 4;
+% S_bc_value = 4;
+% W_bc_value = 1;
+% E_bc_value = 1;
+
 
 nx = sqrt(G.cells.num);
 ny = nx;
@@ -395,21 +409,6 @@ for jj = 1:ny-1
     end
 end
 
-N_bc_value = 3;
-S_bc_value = 4;
-W_bc_value = 2;
-E_bc_value = 1;
-
-% N_bc_value = 1;
-% S_bc_value = 1;
-% W_bc_value = 1;
-% E_bc_value = 1;
-
-% N_bc_value = 4;
-% S_bc_value = 4;
-% W_bc_value = 1;
-% E_bc_value = 1;
-
 
 % North BC
 jj = ny;
@@ -520,78 +519,68 @@ end
 % Southwest corner
 icell = 1;
 Gmat  = sub_G1(:,:,icell);
-P_bc  = [E_bc_value N_bc_value]';
+
+P_bc  = [W_bc_value S_bc_value]';
 in_contrib = [
     -Gmat(1,1)-Gmat(1,2)
     -Gmat(2,1)-Gmat(2,2)
     ];
-bc_contrib = [
-    (-Gmat(1,1)-Gmat(1,2))*-P_bc(1)
-    (-Gmat(2,1)-Gmat(2,2))*-P_bc(2)
-    ];
 
 A(icell,icell) = A(icell,icell) - in_contrib(1);
 A(icell,icell) = A(icell,icell) - in_contrib(2);
-b(icell)       = b(icell)       + bc_contrib(1);
-b(icell)       = b(icell)       + bc_contrib(2);
-
+aa = -sum(Gmat);
+b(icell) = b(icell) - aa*P_bc;
 %disp(['SW === ' num2str(b([1])*1e3-xr1.rhs([1]))])
 
 % Southeast corner
 icell = nx;
 Gmat  = sub_G2(:,:,icell);
-P_bc  = [E_bc_value N_bc_value]';
+P_bc  = [E_bc_value S_bc_value]';
 in_contrib = [
     +Gmat(1,1)-Gmat(1,2)
     +Gmat(2,1)-Gmat(2,2)
     ];
-bc_contrib = [
-    (+Gmat(1,1)-Gmat(1,2))*-P_bc(1)
-    (+Gmat(2,1)-Gmat(2,2))* P_bc(2)
-    ];
-
 A(icell,icell) = A(icell,icell) + in_contrib(1);
 A(icell,icell) = A(icell,icell) - in_contrib(2);
-b(icell)       = b(icell)       - bc_contrib(1); % ???
-b(icell)       = b(icell)       - bc_contrib(2);
+
+aa = [
+    (-Gmat(1,1)+Gmat(2,1))
+    (+Gmat(1,2)-Gmat(2,2))
+    ];
+b(icell) = b(icell) - aa'*P_bc;
+%disp(['SE === ' num2str(b([icell])*1e3-xr1.rhs([icell]))])
 
 
 % northeast corner
 icell = nx*ny;
 Gmat  = sub_G3(:,:,icell);
-P_bc  = [E_bc_value S_bc_value]';
+P_bc  = [E_bc_value N_bc_value]';
 in_contrib = [
     +Gmat(1,1)+Gmat(1,2)
     +Gmat(2,1)+Gmat(2,2)
     ];
-bc_contrib = [
-    (+Gmat(1,1)+Gmat(1,2))*-P_bc(1)
-    (+Gmat(2,1)+Gmat(2,2))*-P_bc(2)
-    ];
-
 A(icell,icell) = A(icell,icell) + in_contrib(1);
 A(icell,icell) = A(icell,icell) + in_contrib(2);
-b(icell)       = b(icell)       - bc_contrib(1);
-b(icell)       = b(icell)       - bc_contrib(2);
+aa = -sum(Gmat);
+b(icell) = b(icell) - aa*P_bc;
+%disp(['NE === ' num2str(b([icell])*1e3-xr1.rhs([icell]))])
 
 
 % northwest corner
 icell = nx*ny-nx+1;
 Gmat  = sub_G4(:,:,icell);
-P_bc  = [W_bc_value S_bc_value]';
+P_bc  = [W_bc_value N_bc_value]';
 in_contrib = [
     -Gmat(1,1)+Gmat(1,2)
     -Gmat(2,1)+Gmat(2,2)
     ];
-bc_contrib = [
-    (-Gmat(1,1)+Gmat(1,2))*P_bc(1)
-    (-Gmat(2,1)+Gmat(2,2))*-P_bc(2)
-    ];
-
 A(icell,icell) = A(icell,icell) - in_contrib(1);
 A(icell,icell) = A(icell,icell) + in_contrib(2);
-b(icell)       = b(icell)       - bc_contrib(1);
-b(icell)       = b(icell)       - bc_contrib(2); % ???
+aa =[-Gmat(1,1) + Gmat(2,1)
+      Gmat(1,2) - Gmat(2,2)];
+
+b(icell) = b(icell) - aa'*P_bc;
+%disp(['NW === ' num2str(b([icell])*1e3-xr1.rhs([icell]))])
 
 %disp(['Error Corners  = ' num2str([b([1 30 900 900-29])*1e3-xr1.rhs([1 30 900 900-29])]') ])
 
