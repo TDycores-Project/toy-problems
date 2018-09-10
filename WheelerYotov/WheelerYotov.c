@@ -64,6 +64,21 @@ void PrintMatrix(PetscScalar *A,PetscInt nr,PetscInt nc,PetscBool row_major)
   printf("]\n");
 }
 
+PetscErrorCode CheckSymmetric(PetscScalar *A,PetscInt n)
+{
+  PetscInt i,j;
+  PetscErrorCode ierr = 0;
+  for(i=0;i<n;i++){
+    for(j=0;j<n;j++){
+      if(PetscAbsReal(A[i*n+j]-A[j*n+i]) > 1e-12){
+	printf("Symmetry Error A[%d,%d] = %f, A[%d,%d] = %f\n",i,j,A[i*n+j],j,i,A[j*n+i]);
+	ierr = 64;
+      }
+    }
+  }
+  return ierr;
+}
+
 PetscReal Pressure(PetscReal x,PetscReal y)
 {
   PetscReal val;
@@ -168,8 +183,10 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
 
   /* globally constant permeability tensor, given in section 5 */
   ierr = PetscMalloc(4*sizeof(PetscReal),&(user->K));CHKERRQ(ierr);
-  user->K[0] = 5;  user->K[2] = 1;
-  user->K[1] = 1;  user->K[3] = 2;
+  //user->K[0] = 5;  user->K[2] = 1;
+  //user->K[1] = 1;  user->K[3] = 2;
+  user->K[0] = 1;  user->K[2] = 0;
+  user->K[1] = 0;  user->K[3] = 1;
 
   /* populate Dirichlet conditions */
   ierr = DMPlexGetHeightStratum(dm,0,&pStart,&pEnd);CHKERRQ(ierr);
@@ -447,7 +464,7 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
     printf("cell %d:\n",c);
     for(q=0;q<nq;q++){
       printf("  vertex %d\n",q);
-      PrintMatrix(&(user->Alocal[c*(DIM*DIM*nq)+q*(DIM*DIM)]),2,2);
+      PrintMatrix(&(user->Alocal[c*(DIM*DIM*nq)+q*(DIM*DIM)]),2,2,PETSC_FALSE);
     }
   }
 #endif
@@ -524,11 +541,11 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	  }if(local_col < 0) { CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE); }
 
 	  // B here is B.T in the paper, assembled in column major
-	  B[local_col*nA+local_row] += sign_row;
+	  B[local_col*nA+local_row] += 0.5*sign_row*user->V[global_row];
 
 	  PetscInt isbc;
 	  ierr = DMPlexGetSupportSize(dm,global_row,&isbc);CHKERRQ(ierr);
-	  if(isbc == 1 && user->bc[closure[c]] == 1) G[local_row] = sign_row*user->g[closure[c]];
+	  if(isbc == 1 && user->bc[closure[c]] == 1) G[local_row] = 0.5*sign_row*user->g[closure[c]]*user->V[global_row];
 
 	  for(element_col=0;element_col<DIM;element_col++){ // which trial function, local to the element/vertex
 	    global_col = user->emap[closure[c]*nq*DIM+element_vertex*DIM+element_col]; // DMPlex point index of the face
@@ -550,21 +567,23 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	    A[local_col*nA+local_row] += user->Alocal[closure[c]    *(DIM*DIM*nq)+
 						      element_vertex*(DIM*DIM   )+
 						      element_row   *(DIM       )+
-						      element_col]*sign_row*sign_col*2*user->V[global_row];
+						      element_col]*sign_row*sign_col*user->V[global_row]*user->V[global_col];
 	  }
 	}
     }
     ierr = DMPlexRestoreTransitiveClosure(dm,v,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);
 #ifdef __DEBUG__
-    printf("vertex %2d\n",v);
+    printf("A,B,G,C,D of vertex %2d\n",v);
     PrintMatrix(A,nA,nA,PETSC_FALSE);
+    ierr = CheckSymmetric(A,nA);CHKERRQ(ierr);
     PrintMatrix(B,nA,nB,PETSC_FALSE);
-    PrintMatrix(G,nB,1 ,PETSC_TRUE);
+    PrintMatrix(G,nB,1 ,PETSC_FALSE);
 #endif
     ierr = FormStencil(&A[0],&B[0],&C[0],&G[0],&D[0],nA,nB);CHKERRQ(ierr);
 #ifdef __DEBUG__
+    //CheckSymmetric(C,nB);
     PrintMatrix(C,nB,nB,PETSC_FALSE);
-    PrintMatrix(D,nB,n1,PETSC_FALSE);
+    PrintMatrix(D,nB, 1,PETSC_FALSE);
 #endif
     /* C and D are in column major, but C is always symmetric and D is
        a vector so it should not matter. */
@@ -622,8 +641,8 @@ int main(int argc, char **argv)
     ierr = PetscSectionGetOffset(coordSection,v,&offset);CHKERRQ(ierr);
     ierr = DMLabelGetValue(label,v,&value);CHKERRQ(ierr);
     if(value==-1){
-      PetscReal r = P*0.2; //((PetscReal)rand())/((PetscReal)RAND_MAX)*(P/N*PetscPowReal(2,0.5)/3.); // h*sqrt(2)/3
-      PetscReal t =   0.0; //((PetscReal)rand())/((PetscReal)RAND_MAX)*PETSC_PI;
+      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*(P/N*PetscPowReal(2,0.5)/3.); // h*sqrt(2)/3
+      PetscReal t = ((PetscReal)rand())/((PetscReal)RAND_MAX)*PETSC_PI;
       coords[offset  ] += r*PetscCosReal(t);
       coords[offset+1] += r*PetscSinReal(t);
     }
