@@ -16,7 +16,7 @@ typedef struct {
   PetscReal *V,*X,*N,*g;
   PetscScalar *K;
   PetscQuadrature q;
-  PetscReal *Alocal;
+  PetscReal *Alocal,*Flocal;
 } AppCtx;
 
 /* /\* Exact pressure field given in paper in section 5, page 2103 *\/ */
@@ -85,14 +85,15 @@ PetscReal Pressure(PetscReal x,PetscReal y)
 
   // these are not affected by the permeability tensor nor require a
   // nonzero forcing, on cartesian mesh
-  val = 3.14;  // perfect
+  //val = 3.14;  // perfect
   //val = (1-x); // O(h)
   //val = (1-y); // O(h)
   //val = (1-x)+(1-y); // O(h)
 
   // requires nonzero forcing, on cartesian mesh
-  //val = (1-x)*(1-y); // O(h)
-  //val = (1-x)+(1-y)*x*x; // does not converge
+  val = x*x;
+  //val = (1-x)*(1-y); // not converging
+  //val = (1-x)+(1-y)*x*x; // not converging
   return val;
 }
 
@@ -100,7 +101,8 @@ PetscReal Pressure(PetscReal x,PetscReal y)
 PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K)
 {
   PetscReal val=0;
-  //val = -K[1]-K[2]; // p = (1-x)*(1-y)
+  val = -2*K[0]; // p = x*x
+  //val = -(K[1]+K[2]); // p = (1-x)*(1-y)
   //val = 2*K[0]*(y-1) + 2*x*(K[1]+K[2]); // p = (1-x)+(1-y)*x*x;
   return val;
 }
@@ -172,6 +174,7 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
   ierr = PetscMalloc(DIM*(pEnd-pStart)*sizeof(PetscReal),&(user->X ));CHKERRQ(ierr);
   ierr = PetscMalloc(DIM*(pEnd-pStart)*sizeof(PetscReal),&(user->N ));CHKERRQ(ierr);
   ierr = PetscMalloc(DIM*DIM*nq*(cEnd-cStart)*sizeof(PetscReal),&(user->Alocal));CHKERRQ(ierr);
+  ierr = PetscMalloc(           (cEnd-cStart)*sizeof(PetscReal),&(user->Flocal));CHKERRQ(ierr);
   ierr = PetscMalloc(    nq*(cEnd-cStart)*sizeof(PetscInt),&(user->vmap));CHKERRQ(ierr);
   ierr = PetscMalloc(DIM*nq*(cEnd-cStart)*sizeof(PetscInt),&(user->emap));CHKERRQ(ierr);
 
@@ -183,10 +186,8 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
 
   /* globally constant permeability tensor, given in section 5 */
   ierr = PetscMalloc(4*sizeof(PetscReal),&(user->K));CHKERRQ(ierr);
-  //user->K[0] = 5;  user->K[2] = 1;
-  //user->K[1] = 1;  user->K[3] = 2;
-  user->K[0] = 1;  user->K[2] = 0;
-  user->K[1] = 0;  user->K[3] = 1;
+  user->K[0] = 5;  user->K[2] = 1;
+  user->K[1] = 1;  user->K[3] = 2;
 
   /* populate Dirichlet conditions */
   ierr = DMPlexGetHeightStratum(dm,0,&pStart,&pEnd);CHKERRQ(ierr);
@@ -317,6 +318,7 @@ PetscErrorCode AppCtxDestroy(AppCtx *user)
   ierr = PetscFree(user->bc);CHKERRQ(ierr);
   ierr = PetscFree(user->K );CHKERRQ(ierr);
   ierr = PetscFree(user->Alocal);CHKERRQ(ierr);
+  ierr = PetscFree(user->Flocal);CHKERRQ(ierr);
   ierr = PetscFree(user->vmap);CHKERRQ(ierr);
   ierr = PetscFree(user->emap);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -435,6 +437,7 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
 
   ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
   for(c=cStart;c<cEnd;c++){
+    user->Flocal[c] = 0;
     ierr = DMPlexComputeCellGeometryFEM(dm,c,user->q,x,DF,DFinv,J);CHKERRQ(ierr); // DF/DFinv is row major
     for(q=0;q<nq;q++){
 
@@ -455,6 +458,9 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
       user->Alocal[i+3]  = (Kinv[0]*n1[q*DIM] + Kinv[2]*n1[q*DIM+1])*n1[q*DIM  ]; // (K n1, n1)
       user->Alocal[i+3] += (Kinv[1]*n1[q*DIM] + Kinv[3]*n1[q*DIM+1])*n1[q*DIM+1];
       user->Alocal[i+3] *= Ehat*wgt;
+
+      // integrate the forcing function using the same quadrature
+      user->Flocal[c] += Forcing(x[0],x[1],user->K)*wgt;
     }
   }
 
@@ -581,7 +587,7 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 #endif
     ierr = FormStencil(&A[0],&B[0],&C[0],&G[0],&D[0],nA,nB);CHKERRQ(ierr);
 #ifdef __DEBUG__
-    //CheckSymmetric(C,nB);
+    ierr = CheckSymmetric(C,nB);CHKERRQ(ierr);
     PrintMatrix(C,nB,nB,PETSC_FALSE);
     PrintMatrix(D,nB, 1,PETSC_FALSE);
 #endif
@@ -590,6 +596,12 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
     ierr = VecSetValues(F,nB,&Bmap[0],            &D[0],ADD_VALUES);CHKERRQ(ierr);
     ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);
   }
+
+  /* Integrate in the forcing */
+  for(c=cStart;c<cEnd;c++){
+    ierr = VecSetValue(F,c,-user->Flocal[c]*user->V[c],ADD_VALUES);CHKERRQ(ierr);    
+  }
+  
   ierr = VecAssemblyBegin(F);CHKERRQ(ierr);
   ierr = VecAssemblyEnd  (F);CHKERRQ(ierr);
   ierr = MatAssemblyBegin(K,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
