@@ -44,6 +44,26 @@ typedef struct {
 /*   return val; */
 /* } */
 
+/* Just to help debug */
+void PrintMatrix(PetscScalar *A,PetscInt nr,PetscInt nc,PetscBool row_major)
+{
+  PetscInt i,j;
+  printf("[[");
+  for(i=0;i<nr;i++){
+    if(i>0) printf(" [");
+    for(j=0;j<nc;j++){
+      if(row_major){
+	printf("%+.14f, ",A[i*nc+j]);
+      }else{
+	printf("%+.14f, ",A[j*nr+i]);
+      }
+    }
+    printf("]");
+    if(i<nr-1) printf(",\n");
+  }
+  printf("]\n");
+}
+
 PetscReal Pressure(PetscReal x,PetscReal y)
 {
   PetscReal val;
@@ -140,18 +160,18 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
   ierr = PetscMalloc(    nq*(cEnd-cStart)*sizeof(PetscInt),&(user->vmap));CHKERRQ(ierr);
   ierr = PetscMalloc(DIM*nq*(cEnd-cStart)*sizeof(PetscInt),&(user->emap));CHKERRQ(ierr);
 
-  // Compute geometry
+  /* compute geometry */
   for(p=pStart;p<pEnd;p++){
     if((p >= vStart) && (p < vEnd)) continue;
     ierr = DMPlexComputeCellGeometryFVM(dm,p,&(user->V[p]),&(user->X[p*DIM]),&(user->N[p*DIM]));CHKERRQ(ierr);
   }
 
-  // Globally constant permeability tensor, given in section 5
+  /* globally constant permeability tensor, given in section 5 */
   ierr = PetscMalloc(4*sizeof(PetscReal),&(user->K));CHKERRQ(ierr);
   user->K[0] = 5;  user->K[2] = 1;
   user->K[1] = 1;  user->K[3] = 2;
 
-  // Populate Dirichlet conditions
+  /* populate Dirichlet conditions */
   ierr = DMPlexGetHeightStratum(dm,0,&pStart,&pEnd);CHKERRQ(ierr);
   for(p=pStart;p<pEnd;p++){
 
@@ -170,6 +190,7 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
       PetscInt supportSize;
       ierr = DMPlexGetSupportSize(dm,cone[c],&supportSize);CHKERRQ(ierr);
       if ((supportSize == 1) && (user->bc[p-pStart] == 0)) {
+
 	/* this is a boundary cell */
 	user->bc[p-pStart] = 1;
 	user->g [p-pStart] = Pressure(user->X[p*DIM  ],
@@ -186,44 +207,85 @@ PetscErrorCode AppCtxCreateMap(DM dm,AppCtx *user)
 {
   PetscFunctionBegin;
   PetscErrorCode ierr;
-  PetscInt i,j,d,c,cStart,cEnd,vStart,vEnd,q,nq=4;
+  PetscInt i,d,c,cStart,cEnd,f,fStart,fEnd,v,vStart,vEnd,q,nq=4;
+  PetscInt local_dirs[8] = {2,1, 3,0, 0,3, 1,2};
   PetscScalar x[DIM*nq],DF[DIM*DIM*nq],DFinv[DIM*DIM*nq],J[nq];
   ierr = DMPlexGetDepthStratum (dm,0,&vStart,&vEnd);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm,1,&fStart,&fEnd);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
   for(c=cStart;c<cEnd;c++){
+
     ierr = DMPlexComputeCellGeometryFEM(dm,c,user->q,x,DF,DFinv,J);CHKERRQ(ierr);
     PetscInt closureSize,*closure = NULL;
     ierr = DMPlexGetTransitiveClosure(dm,c,PETSC_TRUE,&closureSize,&closure);CHKERRQ(ierr);
+
+    /* Check if the image of the quadrature point is coincident with
+       the vertex, if so we create a map, local_element_vertex -->
+       global_vertex_point */
     for(q=0;q<nq;q++){
       for (i=0;i<closureSize*2;i+=2){
 	if ((closure[i] >= vStart) && (closure[i] < vEnd)) {
 	  if ((PetscAbsReal(x[q*DIM  ]-user->X[closure[i]*DIM  ]) > 1e-12) ||
 	      (PetscAbsReal(x[q*DIM+1]-user->X[closure[i]*DIM+1]) > 1e-12)) continue;
 	  user->vmap[c*nq+q] = closure[i];
-
-	  // find the support of the vertex only if it is in the closure	  
-	  PetscInt s,supportSize;
-	  const PetscInt *support;
-	  ierr = DMPlexGetSupportSize(dm,closure[i],&supportSize);CHKERRQ(ierr);
-	  ierr = DMPlexGetSupport    (dm,closure[i],&support    );CHKERRQ(ierr);
-	  for(s=0;s<supportSize;s++){
-	    for(j=0;j<closureSize*2;j+=2) {
-	      if(support[s]==closure[j]){
-		d = PetscAbsReal(DFinv[DIM*DIM*q]*user->N[support[s]*DIM]+DFinv[DIM*DIM*q+1]*user->N[support[s]*DIM+1]) < 1e-12;
-		user->emap[c*nq*DIM+q*DIM+d] = support[s];
-		if(( user->N[support[s]*DIM  ] * (user->X[support[s]*DIM  ] - user->X[c*DIM  ]) +
-		     user->N[support[s]*DIM+1] * (user->X[support[s]*DIM+1] - user->X[c*DIM+1]) ) < 0) user->emap[c*nq*DIM+q*DIM+d] *= -1;
-		break;
-	      }
-	    }
-	  }	  
 	  break;
 	}
       }
     }
-    ierr = DMPlexRestoreTransitiveClosure(dm,c,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);
+
+    /* We need a map for (local_element_vertex,direction) -->
+       global_face_point. To do this, I loop over the vertices of this
+       cell and find connected faces. Then I use the local ordering of
+       the vertices to determine where the normal of this face
+       points. Finally I check if the normal points into the cell. If
+       so, then the index is given a negative as a flag later in the
+       assembly process. Since the Hasse diagram always begins with
+       cells, there isn't a conflict with 0 being a possible point. */
+    for(q=0;q<nq;q++){
+      for (i=0;i<closureSize*2;i+=2){
+	if ((closure[i] >= fStart) && (closure[i] < fEnd)) {
+	  PetscInt fclosureSize,*fclosure = NULL;
+	  ierr = DMPlexGetTransitiveClosure(dm,closure[i],PETSC_TRUE,&fclosureSize,&fclosure);CHKERRQ(ierr);
+	  for(f=0;f<fclosureSize*2;f+=2){
+	    if (fclosure[f] == user->vmap[c*nq+q]){
+	      for(v=0;v<fclosureSize*2;v+=2){
+		for(d=0;d<DIM;d++){
+		  if (fclosure[v] == user->vmap[c*nq+local_dirs[q*DIM+d]]) {
+		    user->emap[c*nq*DIM+q*DIM+d] = closure[i];
+		    if(( user->N[closure[i]*DIM  ] * (user->X[closure[i]*DIM  ] - user->X[c*DIM  ]) +
+			 user->N[closure[i]*DIM+1] * (user->X[closure[i]*DIM+1] - user->X[c*DIM+1]) ) < 0) {
+		      user->emap[c*nq*DIM+q*DIM+d] *= -1;
+		    }
+		    break;
+		  }
+		}
+	      }
+	    }
+	  }
+	  ierr = DMPlexRestoreTransitiveClosure(dm,closure[i],PETSC_TRUE,&fclosureSize,&fclosure);CHKERRQ(ierr);
+	}
+      }
+    }
+    ierr = DMPlexRestoreTransitiveClosure(dm,c,PETSC_TRUE,&closureSize,&closure);CHKERRQ(ierr);
   }
-  PetscFunctionReturn(0);  
+
+#ifdef __DEBUG__
+  /* print out for visual inspection */
+  printf("Check on vmap/emap ------------------------\n");
+  for(c=cStart;c<cEnd;c++){
+    printf("cell %d:\n",c);
+    for(q=0;q<nq;q++){
+      printf("  vertex %2d:",user->vmap[c*nq+q]);
+      for(d=0;d<DIM;d++){
+	printf(" %+2d",user->emap[c*nq*DIM+q*DIM+d]);
+      }
+      printf("\n");
+    }
+    printf("\n");
+  }
+#endif
+
+  PetscFunctionReturn(0);
 }
 
 #undef __FUNCT__
@@ -243,66 +305,48 @@ PetscErrorCode AppCtxDestroy(AppCtx *user)
   PetscFunctionReturn(0);
 }
 
-/* Just to help debug */
-void PrintMatrix(PetscScalar *A,PetscInt nr,PetscInt nc)
-{
-  PetscInt i,j;
-  printf("[[");
-  for(i=0;i<nr;i++){
-    if(i>0) printf(" [");
-    for(j=0;j<nc;j++){
-      printf("%+f, ",A[j*nr+i]);
-    }
-    printf("]");
-    if(i<nr-1) printf(",\n");
-  }
-  printf("]\n");
-}
-
 #undef __FUNCT__
 #define __FUNCT__ "FormStencil"
 PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,
 			   PetscScalar *G,PetscScalar *D,
 			   PetscInt qq,PetscInt rr)
 {
-  // Given block matrices of the form:
+  // Given block matrices of the form in col major form:
   //
-  //   | A(qxq)   | B(qxr) |
-  //   ---------------------
-  //   | B.T(rxq) |   0    |
+  //   | A(qxq)   | B(qxr) |   | U |   | G(q) |
+  //   --------------------- . ----- = --------
+  //   | B.T(rxq) |   0    |   | P |   | F(q) |
   //
-  // return C = B.T A^-1 B
+  // return C(rxr) = B.T A^-1 B in col major
+  //        D(r  ) = B.T A^-1 G in col major
 
   PetscFunctionBegin;
   PetscErrorCode ierr;
-
-  PetscBLASInt q,r,o=1,info,*pivots;
+  PetscBLASInt q,r,o = 1,info,*pivots;
+  PetscScalar zero = 0,one = 1;
   ierr = PetscBLASIntCast(qq,&q);CHKERRQ(ierr);
   ierr = PetscBLASIntCast(rr,&r);CHKERRQ(ierr);
   ierr = PetscMalloc((q+1)*sizeof(PetscBLASInt),&pivots);CHKERRQ(ierr);
 
   // Copy B because we will need it again
   PetscScalar AinvB[qq*rr];
-  ierr = PetscMemcpy(AinvB,B,sizeof(PetscScalar)*(qq*rr));CHKERRQ(ierr);
+  ierr = PetscMemcpy(AinvB,B,sizeof(PetscScalar)*(qq*rr));CHKERRQ(ierr); // AinvB in col major
 
   // Find A = LU factors of A
   LAPACKgetrf_(&q,&q,A,&q,pivots,&info);
   if (info<0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"Bad argument to LU factorization");
   if (info>0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_MAT_LU_ZRPVT,"Bad LU factorization");
 
-  // Solve (A^-1 * B) by back-substitution, stored in AinvB
+  // Solve AinvB = (A^-1 * B) by back-substitution
   LAPACKgetrs_("N",&q,&r,A,&q,pivots,AinvB,&q,&info);
   if (info) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"GETRS - Bad solve");
 
-  // Solve (A^-1 * G) by back-substitution, stored in G
+  // Solve G = (A^-1 * G) by back-substitution
   LAPACKgetrs_("N",&q,&o,A,&q,pivots,G,&q,&info);
   if (info) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"GETRS - Bad solve");
 
   // Compute (B.T * AinvB) and (B.T * G)
-  PetscScalar zero = 0,one = 1;
   BLASgemm_("T","N",&r,&r,&q,&one,B,&q,AinvB,&q,&zero,&C[0],&r); // B.T * AinvB
-
-  // B.T (rxq) * G (q)
   BLASgemm_("T","N",&r,&o,&q,&one,B,&q,G    ,&q,&zero,&D[0],&r); // B.T * G
 
   ierr = PetscFree(pivots);CHKERRQ(ierr);
@@ -314,8 +358,11 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,
 PetscErrorCode Pullback(PetscScalar *K,PetscScalar *DFinv,PetscScalar *Kappa,PetscScalar J,PetscInt nn)
 {
   /*
-    Kappa = J DF^-1 K (DF^-1)^T
-    returns Kappa^-1 in column major format
+    K(dxd)     flattened array in row major (but doesn't matter as it is symmetric)
+    DFinv(dxd) flattened array in row major format (how PETSc generates it)
+    J          det(DF)
+
+    returns Kappa^-1 = ( J DF^-1 K (DF^-1)^T )^-1
    */
 
   PetscFunctionBegin;
@@ -328,8 +375,15 @@ PetscErrorCode Pullback(PetscScalar *K,PetscScalar *DFinv,PetscScalar *Kappa,Pet
   ierr = PetscMalloc((n+1)*sizeof(PetscBLASInt),&pivots);CHKERRQ(ierr);
 
   PetscScalar KDFinvT[n*n],work[n*n];
-  BLASgemm_("N","N",&n,&n,&n,&one,K    ,&n,DFinv  ,&n,&zero,KDFinvT  ,&n); // KDFinvT is now column major
-  BLASgemm_("T","N",&n,&n,&n,&J  ,DFinv,&n,KDFinvT,&n,&zero,&Kappa[0],&n); // Kappa is column major
+  /* LAPACK wants things in column major, so we need to transpose both
+     K and DFinv. However, we are computing K (DF^-1)^T and thus we
+     leave DFinv as is. The resulting KDFinvT is in column major
+     format. */
+  BLASgemm_("T","N",&n,&n,&n,&one,K    ,&n,DFinv  ,&n,&zero,KDFinvT  ,&n);
+  /* Here we are computing J * DFinv * KDFinvT. Since DFinv is row
+     major and LAPACK wants things column major, we need to transpose
+     it. */
+  BLASgemm_("T","N",&n,&n,&n,&J  ,DFinv,&n,KDFinvT,&n,&zero,&Kappa[0],&n);
 
   // Find LU factors of Kappa
   LAPACKgetrf_(&n,&n,&Kappa[0],&n,pivots,&info);
@@ -356,7 +410,7 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
   PetscReal wgt   = 0.25; // 1/s from the paper
   PetscReal Ehat  = 4;    // area of ref element ( [-1,1] x [-1,1] )
   PetscScalar x[DIM*nq],DF[DIM*DIM*nq],DFinv[DIM*DIM*nq],J[nq],Kinv[DIM*DIM];
-  
+
   // using quadrature points as a local numbering, what are the
   // outward normals for each dof at each local vertex?
   PetscScalar n0[8] = {-1, 0,+1, 0,-1, 0,+1, 0};
@@ -364,32 +418,42 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
 
   ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
   for(c=cStart;c<cEnd;c++){
-    ierr = DMPlexComputeCellGeometryFEM(dm,c,user->q,x,DF,DFinv,J);CHKERRQ(ierr);
+    ierr = DMPlexComputeCellGeometryFEM(dm,c,user->q,x,DF,DFinv,J);CHKERRQ(ierr); // DF/DFinv is row major
     for(q=0;q<nq;q++){
 
-      // quadrature points will coincide with vertices, but we do not
-      // know the mapping
+      // compute Kappa^-1 which will be in column major format (shouldn't matter as it is symmetric)
       ierr = Pullback(user->K,&DFinv[DIM*DIM*q],Kinv,J[q],DIM);CHKERRQ(ierr);
 
       // at each vertex, we have a DIM x DIM system which we will store
       i = c*(DIM*DIM*nq)+q*(DIM*DIM);
-      user->Alocal[i  ]  = (Kinv[0]*n0[q*DIM] + Kinv[1]*n0[q*DIM+1])*n0[q*DIM  ]; // (K n0, n0)
-      user->Alocal[i  ] += (Kinv[2]*n0[q*DIM] + Kinv[3]*n0[q*DIM+1])*n0[q*DIM+1];
+      user->Alocal[i  ]  = (Kinv[0]*n0[q*DIM] + Kinv[2]*n0[q*DIM+1])*n0[q*DIM  ]; // (K n0, n0)
+      user->Alocal[i  ] += (Kinv[1]*n0[q*DIM] + Kinv[3]*n0[q*DIM+1])*n0[q*DIM+1];
       user->Alocal[i  ] *= Ehat*wgt;
-      user->Alocal[i+1]  = (Kinv[0]*n1[q*DIM] + Kinv[1]*n1[q*DIM+1])*n0[q*DIM  ]; // (K n1, n0)
-      user->Alocal[i+1] += (Kinv[2]*n1[q*DIM] + Kinv[3]*n1[q*DIM+1])*n0[q*DIM+1];
+      user->Alocal[i+1]  = (Kinv[0]*n1[q*DIM] + Kinv[2]*n1[q*DIM+1])*n0[q*DIM  ]; // (K n1, n0)
+      user->Alocal[i+1] += (Kinv[1]*n1[q*DIM] + Kinv[3]*n1[q*DIM+1])*n0[q*DIM+1];
       user->Alocal[i+1] *= Ehat*wgt;
-      user->Alocal[i+2]  = (Kinv[0]*n0[q*DIM] + Kinv[1]*n0[q*DIM+1])*n1[q*DIM  ]; // (K n0, n1)
-      user->Alocal[i+2] += (Kinv[2]*n0[q*DIM] + Kinv[3]*n0[q*DIM+1])*n1[q*DIM+1];
+      user->Alocal[i+2]  = (Kinv[0]*n0[q*DIM] + Kinv[2]*n0[q*DIM+1])*n1[q*DIM  ]; // (K n0, n1)
+      user->Alocal[i+2] += (Kinv[1]*n0[q*DIM] + Kinv[3]*n0[q*DIM+1])*n1[q*DIM+1];
       user->Alocal[i+2] *= Ehat*wgt;
-      user->Alocal[i+3]  = (Kinv[0]*n1[q*DIM] + Kinv[1]*n1[q*DIM+1])*n1[q*DIM  ]; // (K n1, n1)
-      user->Alocal[i+3] += (Kinv[2]*n1[q*DIM] + Kinv[3]*n1[q*DIM+1])*n1[q*DIM+1];
-      user->Alocal[i+3] *= Ehat*wgt;	
+      user->Alocal[i+3]  = (Kinv[0]*n1[q*DIM] + Kinv[2]*n1[q*DIM+1])*n1[q*DIM  ]; // (K n1, n1)
+      user->Alocal[i+3] += (Kinv[1]*n1[q*DIM] + Kinv[3]*n1[q*DIM+1])*n1[q*DIM+1];
+      user->Alocal[i+3] *= Ehat*wgt;
     }
   }
+
+#ifdef __DEBUG__
+  printf("Check on local matrices ---------------\n");
+  for(c=cStart;c<cEnd;c++){
+    printf("cell %d:\n",c);
+    for(q=0;q<nq;q++){
+      printf("  vertex %d\n",q);
+      PrintMatrix(&(user->Alocal[c*(DIM*DIM*nq)+q*(DIM*DIM)]),2,2);
+    }
+  }
+#endif
+
   PetscFunctionReturn(0);
 }
-
 
 #undef __FUNCT__
 #define __FUNCT__ "WheelerYotovSystem"
@@ -397,8 +461,8 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 {
   PetscFunctionBegin;
   PetscErrorCode ierr;
-  PetscInt v,vStart,vEnd; 
-  PetscInt   fStart,fEnd; 
+  PetscInt v,vStart,vEnd;
+  PetscInt   fStart,fEnd;
   PetscInt c,cStart,cEnd;
   PetscInt element_vertex,nA,nB,q,nq = 4;
   PetscInt element_row,local_row,global_row;
@@ -409,10 +473,10 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
   ierr = DMPlexGetHeightStratum(dm,1,&fStart,&fEnd);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
   for(v=vStart;v<vEnd;v++){ // loop vertices
-    
+
     PetscInt closureSize,*closure = NULL;
     ierr = DMPlexGetTransitiveClosure(dm,v,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);
-    
+
     // determine the size and mapping of the vertex-local systems
     nA = 0; nB = 0;
     for (c = 0; c < closureSize*2; c += 2) {
@@ -424,12 +488,12 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
     ierr = PetscMemzero(C,sizeof(PetscScalar)*MAX_LOCAL_SIZE);CHKERRQ(ierr);
     ierr = PetscMemzero(G,sizeof(PetscScalar)*MAX_LOCAL_SIZE);CHKERRQ(ierr);
     ierr = PetscMemzero(D,sizeof(PetscScalar)*MAX_LOCAL_SIZE);CHKERRQ(ierr);
-    
+
     for (c=0;c<closureSize*2;c+=2){ // loop connected cells
       if ((closure[c] < cStart) || (closure[c] >= cEnd)) continue;
 
 	// for the cell, which local vertex is this vertex?
-	element_vertex = -1; 
+	element_vertex = -1;
 	for(q=0;q<nq;q++){
 	  if(v == user->vmap[closure[c]*nq+q]){
 	    element_vertex = q;
@@ -437,7 +501,7 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	  }
 	}
 	if(element_vertex < 0) { CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE); }
-	
+
 	for(element_row=0;element_row<DIM;element_row++){ // which test function, local to the element/vertex
 	  global_row = user->emap[closure[c]*nq*DIM+element_vertex*DIM+element_row]; // DMPlex point index of the face
 	  sign_row   = PetscSign(global_row);
@@ -458,12 +522,14 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	      break;
 	    }
 	  }if(local_col < 0) { CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE); }
+
+	  // B here is B.T in the paper, assembled in column major
 	  B[local_col*nA+local_row] += sign_row;
-	  
+
 	  PetscInt isbc;
-          ierr = DMPlexGetSupportSize(dm,global_row,&isbc);CHKERRQ(ierr);
+	  ierr = DMPlexGetSupportSize(dm,global_row,&isbc);CHKERRQ(ierr);
 	  if(isbc == 1 && user->bc[closure[c]] == 1) G[local_row] = sign_row*user->g[closure[c]];
-	  
+
 	  for(element_col=0;element_col<DIM;element_col++){ // which trial function, local to the element/vertex
 	    global_col = user->emap[closure[c]*nq*DIM+element_vertex*DIM+element_col]; // DMPlex point index of the face
 	    sign_col   = PetscSign(global_col);
@@ -474,7 +540,13 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 		local_col = q;
 		break;
 	      }
-	    }if(local_col < 0) { CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE); }
+	    }if(local_col < 0) {
+	      printf("Looking for %d in ",global_col);
+	      for(q=0;q<nA;q++){ printf("%d ",Amap[q]); }
+	      printf("\n");
+	      CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE);
+	    }
+	    // Assembled col major, but should be symmetric
 	    A[local_col*nA+local_row] += user->Alocal[closure[c]    *(DIM*DIM*nq)+
 						      element_vertex*(DIM*DIM   )+
 						      element_row   *(DIM       )+
@@ -483,9 +555,21 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	}
     }
     ierr = DMPlexRestoreTransitiveClosure(dm,v,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);
+#ifdef __DEBUG__
+    printf("vertex %2d\n",v);
+    PrintMatrix(A,nA,nA,PETSC_FALSE);
+    PrintMatrix(B,nA,nB,PETSC_FALSE);
+    PrintMatrix(G,nB,1 ,PETSC_TRUE);
+#endif
     ierr = FormStencil(&A[0],&B[0],&C[0],&G[0],&D[0],nA,nB);CHKERRQ(ierr);
+#ifdef __DEBUG__
+    PrintMatrix(C,nB,nB,PETSC_FALSE);
+    PrintMatrix(D,nB,n1,PETSC_FALSE);
+#endif
+    /* C and D are in column major, but C is always symmetric and D is
+       a vector so it should not matter. */
     ierr = VecSetValues(F,nB,&Bmap[0],            &D[0],ADD_VALUES);CHKERRQ(ierr);
-    ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);    
+    ierr = MatSetValues(K,nB,&Bmap[0],nB,&Bmap[0],&C[0],ADD_VALUES);CHKERRQ(ierr);
   }
   ierr = VecAssemblyBegin(F);CHKERRQ(ierr);
   ierr = VecAssemblyEnd  (F);CHKERRQ(ierr);
@@ -538,8 +622,8 @@ int main(int argc, char **argv)
     ierr = PetscSectionGetOffset(coordSection,v,&offset);CHKERRQ(ierr);
     ierr = DMLabelGetValue(label,v,&value);CHKERRQ(ierr);
     if(value==-1){
-      PetscReal r = ((PetscReal)rand())/((PetscReal)RAND_MAX)*(P/N*PetscPowReal(2,0.5)/3.); // h*sqrt(2)/3
-      PetscReal t = ((PetscReal)rand())/((PetscReal)RAND_MAX)*PETSC_PI;
+      PetscReal r = P*0.2; //((PetscReal)rand())/((PetscReal)RAND_MAX)*(P/N*PetscPowReal(2,0.5)/3.); // h*sqrt(2)/3
+      PetscReal t =   0.0; //((PetscReal)rand())/((PetscReal)RAND_MAX)*PETSC_PI;
       coords[offset  ] += r*PetscCosReal(t);
       coords[offset+1] += r*PetscSinReal(t);
     }
@@ -586,7 +670,6 @@ int main(int argc, char **argv)
   ierr = DMPlexSetAdjacencyUseClosure(dm,PETSC_TRUE);CHKERRQ(ierr);
 
   ierr = WYLocalElementCompute(dm,&user);CHKERRQ(ierr);
-
 
   Mat K;
   Vec U,F;
