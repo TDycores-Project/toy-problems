@@ -19,31 +19,6 @@ typedef struct {
   PetscReal *Alocal,*Flocal;
 } AppCtx;
 
-/* /\* Exact pressure field given in paper in section 5, page 2103 *\/ */
-/* PetscReal Pressure(PetscReal x,PetscReal y) */
-/* { */
-/*   PetscReal val; */
-/*   val  = PetscPowReal(1-x,4); */
-/*   val += PetscPowReal(1-y,3)*(1-x); */
-/*   val += PetscSinReal(1-y)*PetscCosReal(1-x); */
-/*   return val; */
-/* } */
-
-/* /\* f = (nabla . -user->K grad(p)) *\/ */
-/* PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K) */
-/* { */
-/*   // -k11*(12*(-x + 1)**2 + sin(y - 1)*cos(x - 1)) */
-/*   // -k12*( 3*(-y + 1)**2 + sin(x - 1)*cos(y - 1)) */
-/*   // -k21*( 3*(-y + 1)**2 + sin(x - 1)*cos(y - 1)) */
-/*   // -k22*(-3*(-x + 1)*(2*y - 2) + sin(y - 1)*cos(x - 1)) */
-/*   PetscReal val; */
-/*   val  = -K[0]*(12*PetscPowReal(1-x,2)+PetscSinReal(y-1)*PetscCosReal(x-1)); */
-/*   val += -K[1]*( 3*PetscPowReal(1-y,2)+PetscSinReal(x-1)*PetscCosReal(y-1)); */
-/*   val += -K[2]*( 3*PetscPowReal(1-y,2)+PetscSinReal(x-1)*PetscCosReal(y-1)); */
-/*   val += -K[3]*(-6*(1-x)*(y-1)+PetscSinReal(y-1)*PetscCosReal(x-1)); */
-/*   return val; */
-/* } */
-
 /* Just to help debug */
 void PrintMatrix(PetscScalar *A,PetscInt nr,PetscInt nc,PetscBool row_major)
 {
@@ -82,28 +57,33 @@ PetscErrorCode CheckSymmetric(PetscScalar *A,PetscInt n)
 PetscReal Pressure(PetscReal x,PetscReal y)
 {
   PetscReal val;
+  //val = 3.14;
+  //val = (1-x);
+  //val = (1-y);
+  //val = (1-x)+(1-y);
+  //val = (x-0.5)*(x-0.5);
+  //val = (1-x)+(1-y)*x*x;
 
-  // these are not affected by the permeability tensor nor require a
-  // nonzero forcing, on cartesian mesh
-  //val = 3.14;  // perfect
-  //val = (1-x); // O(h)
-  //val = (1-y); // O(h)
-  //val = (1-x)+(1-y); // O(h)
-
-  // requires nonzero forcing, on cartesian mesh
-  val = x*x;
-  //val = (1-x)*(1-y); // not converging
-  //val = (1-x)+(1-y)*x*x; // not converging
+  /* Exact pressure field given in paper in section 5, page 2103 */
+  val  = PetscPowReal(1-x,4);
+  val += PetscPowReal(1-y,3)*(1-x);
+  val += PetscSinReal(1-y)*PetscCosReal(1-x);
   return val;
 }
 
 /* f = (nabla . -user->K grad(p)) */
 PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K)
 {
+  // p = 3.14, p = (1-x), p = (1-y), p = (1-x)+(1-y)
   PetscReal val=0;
-  val = -2*K[0]; // p = x*x
-  //val = -(K[1]+K[2]); // p = (1-x)*(1-y)
+  //val = -2*K[0];                        // p = (x-0.5)*(x-0.5)
   //val = 2*K[0]*(y-1) + 2*x*(K[1]+K[2]); // p = (1-x)+(1-y)*x*x;
+
+  /* Exact forcing from pressure field given in paper in section 5, page 2103 */
+  val  = -K[0]*(12*PetscPowReal(1-x,2)+PetscSinReal(y-1)*PetscCosReal(x-1));
+  val += -K[1]*( 3*PetscPowReal(1-y,2)+PetscSinReal(x-1)*PetscCosReal(y-1));
+  val += -K[2]*( 3*PetscPowReal(1-y,2)+PetscSinReal(x-1)*PetscCosReal(y-1));
+  val += -K[3]*(-6*(1-x)*(y-1)+PetscSinReal(y-1)*PetscCosReal(x-1));
   return val;
 }
 
@@ -460,7 +440,7 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
       user->Alocal[i+3] *= Ehat*wgt;
 
       // integrate the forcing function using the same quadrature
-      user->Flocal[c] += Forcing(x[0],x[1],user->K)*wgt;
+      user->Flocal[c] += Forcing(x[0],x[1],user->K)*wgt*J[q];
     }
   }
 
@@ -599,9 +579,9 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 
   /* Integrate in the forcing */
   for(c=cStart;c<cEnd;c++){
-    ierr = VecSetValue(F,c,-user->Flocal[c]*user->V[c],ADD_VALUES);CHKERRQ(ierr);    
+    ierr = VecSetValue(F,c,user->Flocal[c],ADD_VALUES);CHKERRQ(ierr);
   }
-  
+
   ierr = VecAssemblyBegin(F);CHKERRQ(ierr);
   ierr = VecAssemblyEnd  (F);CHKERRQ(ierr);
   ierr = MatAssemblyBegin(K,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
@@ -627,7 +607,7 @@ int main(int argc, char **argv)
   char filename[PETSC_MAX_PATH_LEN] = "../data/simple.e";
   ierr = PetscOptionsBegin(comm,NULL,"Options","");CHKERRQ(ierr);
   ierr = PetscOptionsInt("-N","Number of elements in 1D","",N,&N,NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsReal("-P","set to 0 or 1 to enable perturbing mesh","",P,&P,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsReal("-P","set to 1 to enable perturbing mesh","",P,&P,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsString("-mesh","Exodus.II filename to read","",filename,filename,sizeof(filename),NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
