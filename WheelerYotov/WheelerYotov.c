@@ -87,6 +87,31 @@ PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K)
   return val;
 }
 
+
+PetscErrorCode CheckErrorSpatialDistribution(DM dm, Mat K, Vec F, AppCtx *user)
+{
+  PetscFunctionBegin;
+  PetscErrorCode ierr;
+  PetscInt       c,cStart,cEnd;
+  Vec            Ue,Fe;
+  ierr = VecDuplicate(F,&Fe);CHKERRQ(ierr);
+  ierr = VecDuplicate(F,&Ue);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
+  for(c=cStart;c<cEnd;c++){
+    ierr = VecSetValue(Ue,c,Pressure(user->X[c*DIM],user->X[c*DIM+1]),INSERT_VALUES);CHKERRQ(ierr);
+  }
+  ierr = VecAssemblyBegin(Ue);CHKERRQ(ierr);
+  ierr = VecAssemblyEnd  (Ue);CHKERRQ(ierr);
+  ierr = MatMult(K,Ue,Fe);CHKERRQ(ierr);
+  ierr = VecAXPY(Fe,-1,F);CHKERRQ(ierr);
+  ierr = VecAbs(Fe);CHKERRQ(ierr);
+  ierr = VecAssemblyBegin(Fe);CHKERRQ(ierr);
+  ierr = VecAssemblyEnd  (Fe);CHKERRQ(ierr);
+  ierr = VecDestroy(&Ue);CHKERRQ(ierr);
+  ierr = VecDestroy(&Fe);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 /* Norm of the pressure field given in Remark 4.1 */
 PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
 {
@@ -699,6 +724,9 @@ int main(int argc, char **argv)
 
   L2Error(dm,U,&user);
 
+  ierr = CheckErrorSpatialDistribution(dm,K,F,&user);CHKERRQ(ierr);
+
+  
   ierr = AppCtxDestroy(&user);CHKERRQ(ierr);
   ierr = MatDestroy(&K);CHKERRQ(ierr);
   ierr = VecDestroy(&U);CHKERRQ(ierr);
