@@ -55,7 +55,7 @@ int main(int argc, char **argv)
     if(Xc[1] < 0){
       f    = 0; // field 0 = SoilPressure
       ierr = PetscSectionSetFieldDof(sec,p,0,1);CHKERRQ(ierr);
-      ierr = PetscSectionSetDof     (sec,p,  1);CHKERRQ(ierr);
+      ierr = PetscSectionAddDof     (sec,p,  1);CHKERRQ(ierr);
     }
   }
 
@@ -71,13 +71,13 @@ int main(int argc, char **argv)
 	if(Xc[1] > -rooting_depth[i]){
 	  ndof = 1 + 1 + 3; // axial roots + lateral root + rhizosphere
 	  ierr = PetscSectionSetFieldDof(sec,p,f,ndof);CHKERRQ(ierr);
-	  ierr = PetscSectionSetDof     (sec,p,  ndof);CHKERRQ(ierr);
+	  ierr = PetscSectionAddDof     (sec,p,  ndof);CHKERRQ(ierr);
 	}
       }else{ /* above ground */
 	if(Xc[1] < canopy_height[i]){
 	  ndof = 1 + 1; // xylem + leaves 
 	  ierr = PetscSectionSetFieldDof(sec,p,f,ndof);CHKERRQ(ierr);
-	  ierr = PetscSectionSetDof     (sec,p,  ndof);CHKERRQ(ierr);
+	  ierr = PetscSectionAddDof     (sec,p,  ndof);CHKERRQ(ierr);
 	}
       }
     }
@@ -94,10 +94,23 @@ int main(int argc, char **argv)
   ierr = DMPlexSetAdjacencyUseCone(dm,PETSC_TRUE);CHKERRQ(ierr);
   ierr = DMPlexSetAdjacencyUseClosure(dm,PETSC_TRUE);CHKERRQ(ierr);
 
+  /* Global system matrix */
   Mat K;
   ierr = DMCreateMatrix(dm,&K);CHKERRQ(ierr);
+
+  /* Now say we want to deal with plant type 1 separately. */
+  DM  dm_plant1;
+  IS  is_plant1;
+  Mat K_plant1;
+  const PetscInt fields[1] = {1};
+  ierr = DMCreateSubDM(dm,1,fields,&is_plant1,&dm_plant1);CHKERRQ(ierr);
+  ierr = DMCreateMatrix(dm_plant1,&K_plant1);CHKERRQ(ierr);
   
+
+  
+  ierr = MatDestroy(&K_plant1);CHKERRQ(ierr);
   ierr = MatDestroy(&K);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm_plant1);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = PetscFinalize();CHKERRQ(ierr);
   return(0);
