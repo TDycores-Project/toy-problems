@@ -216,8 +216,8 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
 
 	/* this is a boundary cell */
 	user->bc[p-pStart] = 1;
-	user->g [p-pStart] = Pressure(user->X[p*DIM  ],
-				      user->X[p*DIM+1]);
+	user->g [p-pStart] = Pressure(user->X[cone[c]*DIM  ],
+				      user->X[cone[c]*DIM+1]);
       }
     }
   }
