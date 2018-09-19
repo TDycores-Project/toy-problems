@@ -12,8 +12,8 @@ https://doi.org/10.1137/050638473
 #include <petscblaslapack.h>
 
 typedef struct {
-  PetscInt  *bc,*vmap,*emap;
-  PetscReal *V,*X,*N,*g;
+  PetscInt  *vmap,*emap,exact;
+  PetscReal *V,*X,*N;
   PetscScalar *K;
   PetscQuadrature q;
   PetscReal *Alocal,*Flocal;
@@ -54,36 +54,33 @@ PetscErrorCode CheckSymmetric(PetscScalar *A,PetscInt n)
   return ierr;
 }
 
-PetscReal Pressure(PetscReal x,PetscReal y)
+PetscReal Pressure(PetscReal x,PetscReal y,AppCtx *user)
 {
   PetscReal val;
-  //val = 3.14;
-  //val = (1-x);
-  //val = (1-y);
-  //val = (1-x)+(1-y);
-  //val = (x-0.5)*(x-0.5);
-  //val = (1-x)+(1-y)*x*x;
-
-  /* Exact pressure field given in paper in section 5, page 2103 */
-  val  = PetscPowReal(1-x,4);
-  val += PetscPowReal(1-y,3)*(1-x);
-  val += PetscSinReal(1-y)*PetscCosReal(1-x);
+  if(user->exact == 0){
+    val = (x-0.5)*(x-0.5);
+  }else{
+    /* Exact pressure field given in paper in section 5, page 2103 */
+    val  = PetscPowReal(1-x,4);
+    val += PetscPowReal(1-y,3)*(1-x);
+    val += PetscSinReal(1-y)*PetscCosReal(1-x);
+  }
   return val;
 }
 
 /* f = (nabla . -user->K grad(p)) */
-PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K)
+PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K,AppCtx *user)
 {
-  // p = 3.14, p = (1-x), p = (1-y), p = (1-x)+(1-y)
-  PetscReal val=0;
-  //val = -2*K[0];                        // p = (x-0.5)*(x-0.5)
-  //val = 2*K[0]*(y-1) + 2*x*(K[1]+K[2]); // p = (1-x)+(1-y)*x*x;
-
-  /* Exact forcing from pressure field given in paper in section 5, page 2103 */
-  val  = -K[0]*(12*PetscPowReal(1-x,2)+PetscSinReal(y-1)*PetscCosReal(x-1));
-  val += -K[1]*( 3*PetscPowReal(1-y,2)+PetscSinReal(x-1)*PetscCosReal(y-1));
-  val += -K[2]*( 3*PetscPowReal(1-y,2)+PetscSinReal(x-1)*PetscCosReal(y-1));
-  val += -K[3]*(-6*(1-x)*(y-1)+PetscSinReal(y-1)*PetscCosReal(x-1));
+  PetscReal val;
+  if(user->exact == 0){
+    val  = -2*K[0]; 
+  }else{
+    /* Exact forcing from pressure field given in paper in section 5, page 2103 */
+    val  = -K[0]*(12*PetscPowReal(1-x,2)+PetscSinReal(y-1)*PetscCosReal(x-1));
+    val += -K[1]*( 3*PetscPowReal(1-y,2)+PetscSinReal(x-1)*PetscCosReal(y-1));
+    val += -K[2]*( 3*PetscPowReal(1-y,2)+PetscSinReal(x-1)*PetscCosReal(y-1));
+    val += -K[3]*(-6*(1-x)*(y-1)+PetscSinReal(y-1)*PetscCosReal(x-1));
+  }
   return val;
 }
 
@@ -98,7 +95,7 @@ PetscErrorCode CheckErrorSpatialDistribution(DM dm, Mat K, Vec F, AppCtx *user)
   ierr = VecDuplicate(F,&Ue);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
   for(c=cStart;c<cEnd;c++){
-    ierr = VecSetValue(Ue,c,Pressure(user->X[c*DIM],user->X[c*DIM+1]),INSERT_VALUES);CHKERRQ(ierr);
+    ierr = VecSetValue(Ue,c,Pressure(user->X[c*DIM],user->X[c*DIM+1],user),INSERT_VALUES);CHKERRQ(ierr);
   }
   ierr = VecAssemblyBegin(Ue);CHKERRQ(ierr);
   ierr = VecAssemblyEnd  (Ue);CHKERRQ(ierr);
@@ -128,7 +125,7 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
   L2 = 0.;
   for(c=cStart;c<cEnd;c++){
     ierr = PetscSectionGetOffset(section,c,&offset);CHKERRQ(ierr);
-    L2  += user->V[c]*PetscSqr(u[offset]-Pressure(user->X[(c-cStart)*2],user->X[(c-cStart)*2+1]));
+    L2  += user->V[c]*PetscSqr(u[offset]-Pressure(user->X[(c-cStart)*2],user->X[(c-cStart)*2+1],user));
   }
   printf("%e\n",PetscSqrtReal(L2));
   ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
@@ -168,14 +165,14 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
   PetscErrorCode ierr;
   PetscInt p,pStart,pEnd;
   PetscInt   vStart,vEnd;
+  PetscInt   fStart,fEnd;  
   PetscInt   cStart,cEnd;
   PetscInt nq=4;
-  ierr = DMPlexGetChart(dm,&pStart,&pEnd);CHKERRQ(ierr);
+  ierr = DMPlexGetChart        (dm,  &pStart,&pEnd);CHKERRQ(ierr);
   ierr = DMPlexGetDepthStratum (dm,0,&vStart,&vEnd);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm,1,&fStart,&fEnd);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
   ierr = PetscMalloc(    (pEnd-pStart)*sizeof(PetscReal),&(user->V ));CHKERRQ(ierr);
-  ierr = PetscMalloc(    (pEnd-pStart)*sizeof(PetscReal),&(user->g ));CHKERRQ(ierr);
-  ierr = PetscMalloc(    (pEnd-pStart)*sizeof(PetscInt ),&(user->bc));CHKERRQ(ierr);
   ierr = PetscMalloc(DIM*(pEnd-pStart)*sizeof(PetscReal),&(user->X ));CHKERRQ(ierr);
   ierr = PetscMalloc(DIM*(pEnd-pStart)*sizeof(PetscReal),&(user->N ));CHKERRQ(ierr);
   ierr = PetscMalloc(DIM*DIM*nq*(cEnd-cStart)*sizeof(PetscReal),&(user->Alocal));CHKERRQ(ierr);
@@ -193,34 +190,7 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
   ierr = PetscMalloc(4*sizeof(PetscReal),&(user->K));CHKERRQ(ierr);
   user->K[0] = 5;  user->K[2] = 1;
   user->K[1] = 1;  user->K[3] = 2;
-
-  /* populate Dirichlet conditions */
-  ierr = DMPlexGetHeightStratum(dm,0,&pStart,&pEnd);CHKERRQ(ierr);
-  for(p=pStart;p<pEnd;p++){
-
-    /* initialize */
-    user->bc[p-pStart] = 0;
-    user->g [p-pStart] = 0;
-
-    /* faces connected to this cell */
-    PetscInt c,coneSize;
-    const PetscInt *cone;
-    ierr = DMPlexGetConeSize(dm,p,&coneSize);CHKERRQ(ierr);
-    ierr = DMPlexGetCone    (dm,p,&cone    );CHKERRQ(ierr);
-    for(c=0;c<coneSize;c++){
-
-      /* how many cells are connected to this face */
-      PetscInt supportSize;
-      ierr = DMPlexGetSupportSize(dm,cone[c],&supportSize);CHKERRQ(ierr);
-      if ((supportSize == 1) && (user->bc[p-pStart] == 0)) {
-
-	/* this is a boundary cell */
-	user->bc[p-pStart] = 1;
-	user->g [p-pStart] = Pressure(user->X[cone[c]*DIM  ],
-				      user->X[cone[c]*DIM+1]);
-      }
-    }
-  }
+    
   PetscFunctionReturn(0);
 }
 
@@ -319,8 +289,6 @@ PetscErrorCode AppCtxDestroy(AppCtx *user)
   PetscErrorCode ierr;
   ierr = PetscFree(user->V );CHKERRQ(ierr);
   ierr = PetscFree(user->X );CHKERRQ(ierr);
-  ierr = PetscFree(user->g );CHKERRQ(ierr);
-  ierr = PetscFree(user->bc);CHKERRQ(ierr);
   ierr = PetscFree(user->K );CHKERRQ(ierr);
   ierr = PetscFree(user->Alocal);CHKERRQ(ierr);
   ierr = PetscFree(user->Flocal);CHKERRQ(ierr);
@@ -465,7 +433,7 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
       user->Alocal[i+3] *= Ehat*wgt;
 
       // integrate the forcing function using the same quadrature
-      user->Flocal[c] += Forcing(x[0],x[1],user->K)*wgt*J[q];
+      user->Flocal[c] += Forcing(x[0],x[1],user->K,user)*wgt*J[q];
     }
   }
 
@@ -554,10 +522,13 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	  // B here is B.T in the paper, assembled in column major
 	  B[local_col*nA+local_row] += 0.5*sign_row*user->V[global_row];
 
+	  // boundary conditions
 	  PetscInt isbc;
 	  ierr = DMPlexGetSupportSize(dm,global_row,&isbc);CHKERRQ(ierr);
-	  if(isbc == 1 && user->bc[closure[c]] == 1) G[local_row] = 0.5*sign_row*user->g[closure[c]]*user->V[global_row];
-
+	  if(isbc == 1){
+	    G[local_row] += 0.5*sign_row*Pressure(user->X[v*DIM],user->X[v*DIM+1],user)*user->V[global_row];
+	  }
+	  
 	  for(element_col=0;element_col<DIM;element_col++){ // which trial function, local to the element/vertex
 	    global_col = user->emap[closure[c]*nq*DIM+element_vertex*DIM+element_col]; // DMPlex point index of the face
 	    sign_col   = PetscSign(global_col);
@@ -627,11 +598,14 @@ int main(int argc, char **argv)
   ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
 
   // Options
-  PetscInt N = 8;
+  AppCtx    user;
+  PetscInt  N = 8;
   PetscReal P = 0;
+  user.exact  = 0;
   char filename[PETSC_MAX_PATH_LEN] = "../data/simple.e";
   ierr = PetscOptionsBegin(comm,NULL,"Options","");CHKERRQ(ierr);
   ierr = PetscOptionsInt("-N","Number of elements in 1D","",N,&N,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-E","Which exact solution","",user.exact,&(user.exact),NULL);CHKERRQ(ierr);
   ierr = PetscOptionsReal("-P","set to 1 to enable perturbing mesh","",P,&P,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsString("-mesh","Exodus.II filename to read","",filename,filename,sizeof(filename),NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
@@ -668,9 +642,8 @@ int main(int argc, char **argv)
   ierr = DMViewFromOptions(dm, NULL, "-dm_view");CHKERRQ(ierr);
   ierr = DMSetFromOptions(dm);CHKERRQ(ierr);
 
-  AppCtx user;
-  ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
   ierr = PetscDTWheelerYotovQuadrature(dm,&user);CHKERRQ(ierr);
+  ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
 
   // load vertex locations, this messes up -dm_refine
   ierr = VecGetArray(coordinates,&coords);CHKERRQ(ierr);
