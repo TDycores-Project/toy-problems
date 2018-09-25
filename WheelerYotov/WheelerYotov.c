@@ -648,7 +648,10 @@ int main(int argc, char **argv)
   ierr = PetscDTWheelerYotovQuadrature(dm,&user);CHKERRQ(ierr);
   ierr = AppCtxCreate(dm,&user);CHKERRQ(ierr);
 
-  // load vertex locations, this messes up -dm_refine
+  // load vertex locations
+  ierr = DMGetCoordinateSection(dm, &coordSection);CHKERRQ(ierr);
+  ierr = DMGetCoordinatesLocal(dm, &coordinates);CHKERRQ(ierr);
+  ierr = DMPlexGetDepthStratum(dm, 0, &vStart, &vEnd);CHKERRQ(ierr);
   ierr = VecGetArray(coordinates,&coords);CHKERRQ(ierr);
   for(v=vStart;v<vEnd;v++){
     ierr = PetscSectionGetOffset(coordSection,v,&offset);CHKERRQ(ierr);

@@ -9,7 +9,8 @@ E = np.zeros(N.shape)
 
 print "1/h  Cartesian" if P < 1e-6 else "1/h  Perturbed %.2f" % P
 for i,n in enumerate(N):
-    process = subprocess.Popen("./WheelerYotov -pc_type lu -N %d -P %f -E %d" % (n,P,X),
+    ref = "" if i == 0 else " -dm_refine %d" % i
+    process = subprocess.Popen("./WheelerYotov -pc_type lu -N 8 -P %f -E %d %s" % (P,X,ref),
                                shell=True,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
