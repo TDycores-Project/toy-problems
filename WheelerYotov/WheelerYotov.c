@@ -58,7 +58,9 @@ PetscReal Pressure(PetscReal x,PetscReal y,AppCtx *user)
 {
   PetscReal val;
   if(user->exact == 0){
-    val = (x-0.5)*(x-0.5);
+    val  = 1-x; 
+  }else if(user->exact == 1){
+    val  = (x-0.5)*(x-0.5);
   }else{
     /* Exact pressure field given in paper in section 5, page 2103 */
     val  = PetscPowReal(1-x,4);
@@ -73,7 +75,9 @@ PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K,AppCtx *user)
 {
   PetscReal val;
   if(user->exact == 0){
-    val  = -2*K[0]; 
+    val  = 0; 
+  }else if(user->exact == 1){
+    val  = -2*K[0];
   }else{
     /* Exact forcing from pressure field given in paper in section 5, page 2103 */
     val  = -K[0]*(12*PetscPowReal(1-x,2)+PetscSinReal(y-1)*PetscCosReal(x-1));
@@ -510,7 +514,6 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 	    }
 	  }if(local_row < 0) { CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE); }
 
-	  // B for each vertex is constant, could just store it
 	  local_col  = -1;
 	  for(q=0;q<nB;q++){
 	    if(Bmap[q] == closure[c]) {
