@@ -1,26 +1,12 @@
-%function mpfao()
-
-
-load mesh_30x30.mat
+function [A,b] = mpfao(G,rock)
 
 N_bc_value = 3;
 S_bc_value = 4;
 W_bc_value = 2;
 E_bc_value = 1;
 
-% N_bc_value = 4;
-% S_bc_value = 4;
-% W_bc_value = 4;
-% E_bc_value = 4;
-% 
-% N_bc_value = 4;
-% S_bc_value = 4;
-% W_bc_value = 1;
-% E_bc_value = 1;
-
-
-nx = sqrt(G.cells.num);
-ny = nx;
+nx = G.cartDims(1);
+ny = G.cartDims(2);
 
 sub1_v1 = zeros(G.cells.num,2);
 sub2_v1 = zeros(G.cells.num,2);
