@@ -437,7 +437,7 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
       user->Alocal[i+3] *= Ehat*wgt;
 
       // integrate the forcing function using the same quadrature
-      user->Flocal[c] += Forcing(x[0],x[1],user->K,user)*wgt*J[q];
+      user->Flocal[c] += Forcing(x[q*DIM],x[q*DIM+1],user->K,user)*wgt*J[q];
     }
   }
 
