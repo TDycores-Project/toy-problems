@@ -16,7 +16,7 @@ typedef struct {
   PetscReal *V,*X,*N;
   PetscScalar *K;
   PetscQuadrature q;
-  PetscReal *Alocal,*Flocal;
+  PetscReal *Alocal,*Flocal,*vel;
 } AppCtx;
 
 /* Just to help debug */
@@ -75,9 +75,9 @@ PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K,AppCtx *user)
 {
   PetscReal val;
   if(user->exact == 0){
-    val  = 0; 
+    val = 0; 
   }else if(user->exact == 1){
-    val  = -2*K[0];
+    val = -2*K[0];
   }else{
     /* Exact forcing from pressure field given in paper in section 5, page 2103 */
     val  = -K[0]*(12*PetscPowReal(1-x,2)+PetscSinReal(y-1)*PetscCosReal(x-1));
@@ -88,6 +88,27 @@ PetscReal Forcing(PetscReal x,PetscReal y,PetscScalar *K,AppCtx *user)
   return val;
 }
 
+/* v = -user->K grad(p) */
+void Velocity(PetscReal x,PetscReal y,PetscScalar *K,PetscScalar *vx,PetscScalar *vy,AppCtx *user)
+{
+  PetscReal u,v; // grad(p)
+  if(user->exact == 0){
+    u = -1;
+    v =  0;
+  }else if(user->exact == 1){
+    u = 2*x-1;
+    v = 0;
+  }else{
+    u  = -4*PetscPowReal(1-x,3);
+    u += -PetscPowReal(1-y,3);
+    u += +PetscSinReal(y-1)*PetscSinReal(x-1);
+    v  = -3*PetscPowReal(1-y,2)*(1-x);
+    v += -PetscCosReal(x-1)*PetscCosReal(y-1);
+  }
+  (*vx) = -(K[0]*u + K[1]*v);
+  (*vy) = -(K[2]*u + K[3]*v);
+  return;
+}
 
 PetscErrorCode CheckErrorSpatialDistribution(DM dm, Mat K, Vec F, AppCtx *user)
 {
@@ -119,20 +140,65 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
   PetscFunctionBegin;
   PetscErrorCode ierr;
   PetscScalar *u,L2;
-  PetscInt c,cStart,cEnd;
+  PetscSection section;
+  PetscInt c,cStart,cEnd,offset;
+  PetscInt f,fStart,fEnd;
   ierr = VecGetArray(U,&u);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm,1,&fStart,&fEnd);CHKERRQ(ierr);
 
-  PetscSection section;
-  PetscInt offset;
+  // Pressure
   ierr = DMGetDefaultSection(dm, &section);CHKERRQ(ierr);
-  L2 = 0.;
+  L2 = 0;
   for(c=cStart;c<cEnd;c++){
     ierr = PetscSectionGetOffset(section,c,&offset);CHKERRQ(ierr);
     L2  += user->V[c]*PetscSqr(u[offset]-Pressure(user->X[(c-cStart)*2],user->X[(c-cStart)*2+1],user));
   }
-  printf("%e\n",PetscSqrtReal(L2));
+  printf("%e ",PetscSqrtReal(L2));
   ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
+
+  // Velocity
+  L2 = 0;
+  PetscScalar vx,vy,ve,v;
+  for(f=fStart;f<fEnd;f++){
+    v = 0.5*(user->vel[DIM*(f-fStart)]+user->vel[DIM*(f-fStart)+1])/user->V[f]; // (v.n) at face centroid
+    Velocity(user->X[DIM*f],user->X[DIM*f+1],user->K,&vx,&vy,user);
+    ve = vx*user->N[DIM*f] + vy*user->N[DIM*f+1]; // exact (v.n) at face centroid
+    //printf("vel: (%f, %f)  v = [%f %f]  ve.n = %f v.n = %f\n",user->X[DIM*f],user->X[DIM*f+1],vx,vy,ve,v);
+    L2 += PetscSqr(v-ve);
+  }
+  printf("%e ",PetscSqrtReal(L2));
+
+  // Divergence
+  L2 = 0;
+  PetscScalar div0,div,sign;
+  for(c=cStart;c<cEnd;c++){
+    PetscInt v,i,j,nf;
+    const PetscInt *faces;
+    ierr = DMPlexGetConeSize(dm,c,&nf   );CHKERRQ(ierr);
+    ierr = DMPlexGetCone    (dm,c,&faces);CHKERRQ(ierr);
+    div0 = 0;
+    div  = 0;
+    for(i=0;i<nf;i++){
+      f = faces[i];
+      PetscInt nv;
+      const PetscInt *verts;
+      ierr = DMPlexGetConeSize(dm,f,&nv   );CHKERRQ(ierr);
+      ierr = DMPlexGetCone    (dm,f,&verts);CHKERRQ(ierr);
+      sign = PetscSign(user->N[DIM*f  ]*(user->X[DIM*f  ]-user->X[DIM*c  ])+
+		       user->N[DIM*f+1]*(user->X[DIM*f+1]-user->X[DIM*c+1]));
+      for(j=0;j<nv;j++){
+	v = verts[j];
+	Velocity(user->X[DIM*v],user->X[DIM*v+1],user->K,&vx,&vy,user);	
+	div0 += sign*(vx*user->N[DIM*f] + vy*user->N[DIM*f+1])*0.5*user->V[f];
+	div  += sign*user->vel[DIM*(f-fStart)+j]              *0.5*2.0;
+      }
+    }
+    //printf("div: %e %e\n",div0,div);
+    L2  += user->V[c]*PetscSqr(div-div0);
+  }
+  printf("%e\n",PetscSqrtReal(L2));
+  
   PetscFunctionReturn(0);
 }
 
@@ -183,6 +249,7 @@ PetscErrorCode AppCtxCreate(DM dm,AppCtx *user)
   ierr = PetscMalloc(           (cEnd-cStart)*sizeof(PetscReal),&(user->Flocal));CHKERRQ(ierr);
   ierr = PetscMalloc(    nq*(cEnd-cStart)*sizeof(PetscInt),&(user->vmap));CHKERRQ(ierr);
   ierr = PetscMalloc(DIM*nq*(cEnd-cStart)*sizeof(PetscInt),&(user->emap));CHKERRQ(ierr);
+  ierr = PetscMalloc(DIM   *(fEnd-fStart)*sizeof(PetscReal),&(user->vel));CHKERRQ(ierr);
 
   /* compute geometry */
   for(p=pStart;p<pEnd;p++){
@@ -298,6 +365,7 @@ PetscErrorCode AppCtxDestroy(AppCtx *user)
   ierr = PetscFree(user->Flocal);CHKERRQ(ierr);
   ierr = PetscFree(user->vmap);CHKERRQ(ierr);
   ierr = PetscFree(user->emap);CHKERRQ(ierr);
+  ierr = PetscFree(user->vel );CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -344,6 +412,36 @@ PetscErrorCode FormStencil(PetscScalar *A,PetscScalar *B,PetscScalar *C,
   // Compute (B.T * AinvB) and (B.T * G)
   BLASgemm_("T","N",&r,&r,&q,&one,B,&q,AinvB,&q,&zero,&C[0],&r); // B.T * AinvB
   BLASgemm_("T","N",&r,&o,&q,&one,B,&q,G    ,&q,&zero,&D[0],&r); // B.T * G
+
+  ierr = PetscFree(pivots);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
+#define __FUNCT__ "RecoverVelocity"
+PetscErrorCode RecoverVelocity(PetscScalar *A,PetscScalar *F,PetscInt qq)
+{
+  // Given block matrices of the form in col major form:
+  //
+  //   | A(qxq)   | B(qxr) |   | U |   | G(q) |
+  //   --------------------- . ----- = --------
+  //   | B.T(rxq) |   0    |   | P |   | F(q) |
+  //
+  // return A U = G - B P
+  PetscFunctionBegin;
+  PetscErrorCode ierr;
+  PetscBLASInt q,o = 1,info,*pivots;
+  ierr = PetscBLASIntCast(qq,&q);CHKERRQ(ierr);
+  ierr = PetscMalloc((q+1)*sizeof(PetscBLASInt),&pivots);CHKERRQ(ierr);
+
+  // Find A = LU factors of A
+  LAPACKgetrf_(&q,&q,A,&q,pivots,&info);
+  if (info<0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"Bad argument to LU factorization");
+  if (info>0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_MAT_LU_ZRPVT,"Bad LU factorization");
+
+  // Solve by back-substitution
+  LAPACKgetrs_("N",&q,&o,A,&q,pivots,F,&q,&info);
+  if (info) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"GETRS - Bad solve");
 
   ierr = PetscFree(pivots);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -589,6 +687,144 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 }
 
 #undef __FUNCT__
+#define __FUNCT__ "WheelerYotovRecoverVelocity"
+PetscErrorCode WheelerYotovRecoverVelocity(DM dm,Vec U,AppCtx *user)
+{
+  // Given block matrices of the form in col major form:
+  //
+  //   | A(qxq)   | B(qxr) |   | U |   | G(q) |
+  //   --------------------- . ----- = --------
+  //   | B.T(rxq) |   0    |   | P |   | F(q) |
+  //
+  // Compute (- B.T A^-1 B ) U = G - B.T A^-1 F
+  // A U = G - B P
+  PetscFunctionBegin;
+  PetscErrorCode ierr;
+  PetscInt v,vStart,vEnd;
+  PetscInt   fStart,fEnd;
+  PetscInt c,cStart,cEnd;
+  PetscInt element_vertex,nA,nB,q,nq = 4;
+  PetscInt element_row,local_row,global_row;
+  PetscInt element_col,local_col,global_col;
+  PetscScalar A[MAX_LOCAL_SIZE],F[MAX_LOCAL_SIZE],sign_row,sign_col;
+  PetscInt Amap[MAX_LOCAL_SIZE],Bmap[MAX_LOCAL_SIZE];
+  ierr = DMPlexGetDepthStratum (dm,0,&vStart,&vEnd);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm,1,&fStart,&fEnd);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
+  PetscSection section;
+  PetscInt     offset;
+  PetscScalar *u;
+  ierr = VecGetArray(U,&u);CHKERRQ(ierr);
+  ierr = DMGetDefaultSection(dm, &section);CHKERRQ(ierr);
+  for(v=vStart;v<vEnd;v++){ // loop vertices
+
+    PetscInt closureSize,*closure = NULL;
+    ierr = DMPlexGetTransitiveClosure(dm,v,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);
+
+    // determine the size and mapping of the vertex-local systems
+    nA = 0; nB = 0;
+    for (c = 0; c < closureSize*2; c += 2) {
+      if ((closure[c] >= fStart) && (closure[c] < fEnd)) { Amap[nA] = closure[c]; nA += 1; }
+      if ((closure[c] >= cStart) && (closure[c] < cEnd)) { Bmap[nB] = closure[c]; nB += 1; }
+    }
+    ierr = PetscMemzero(A,sizeof(PetscScalar)*MAX_LOCAL_SIZE);CHKERRQ(ierr);
+    ierr = PetscMemzero(F,sizeof(PetscScalar)*MAX_LOCAL_SIZE);CHKERRQ(ierr);
+
+    for (c=0;c<closureSize*2;c+=2){ // loop connected cells
+      if ((closure[c] < cStart) || (closure[c] >= cEnd)) continue;
+
+	// for the cell, which local vertex is this vertex?
+	element_vertex = -1;
+	for(q=0;q<nq;q++){
+	  if(v == user->vmap[closure[c]*nq+q]){
+	    element_vertex = q;
+	    break;
+	  }
+	}
+	if(element_vertex < 0) { CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE); }
+
+	for(element_row=0;element_row<DIM;element_row++){ // which test function, local to the element/vertex
+	  global_row = user->emap[closure[c]*nq*DIM+element_vertex*DIM+element_row]; // DMPlex point index of the face
+	  sign_row   = PetscSign(global_row);
+	  global_row = PetscAbsInt(global_row);
+	  local_row  = -1;
+	  for(q=0;q<nA;q++){
+	    if(Amap[q] == global_row) {
+	      local_row = q; // row into block matrix A, local to vertex
+	      break;
+	    }
+	  }if(local_row < 0) { CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE); }
+
+	  local_col  = -1;
+	  for(q=0;q<nB;q++){
+	    if(Bmap[q] == closure[c]) {
+	      local_col = q; // col into block matrix B, local to vertex
+	      break;
+	    }
+	  }if(local_col < 0) { CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE); }
+
+	  // B P
+	  ierr = PetscSectionGetOffset(section,closure[c],&offset);CHKERRQ(ierr);
+	  F[local_row] += 0.5*sign_row*u[offset]*user->V[global_row];
+
+	  // boundary conditions
+	  PetscInt isbc;
+	  ierr = DMPlexGetSupportSize(dm,global_row,&isbc);CHKERRQ(ierr);
+	  if(isbc == 1){
+	    F[local_row] -= 0.5*sign_row*Pressure(user->X[v*DIM],user->X[v*DIM+1],user)*user->V[global_row];
+	  }
+	  
+	  for(element_col=0;element_col<DIM;element_col++){ // which trial function, local to the element/vertex
+	    global_col = user->emap[closure[c]*nq*DIM+element_vertex*DIM+element_col]; // DMPlex point index of the face
+	    sign_col   = PetscSign(global_col);
+	    global_col = PetscAbsInt(global_col);
+	    local_col  = -1; // col into block matrix A, local to vertex
+	    for(q=0;q<nA;q++){
+	      if(Amap[q] == global_col) {
+		local_col = q;
+		break;
+	      }
+	    }if(local_col < 0) {
+	      printf("Looking for %d in ",global_col);
+	      for(q=0;q<nA;q++){ printf("%d ",Amap[q]); }
+	      printf("\n");
+	      CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE);
+	    }
+	    // Assembled col major, but should be symmetric
+	    A[local_col*nA+local_row] += user->Alocal[closure[c]    *(DIM*DIM*nq)+
+						      element_vertex*(DIM*DIM   )+
+						      element_row   *(DIM       )+
+						      element_col]*sign_row*sign_col*user->V[global_row]*user->V[global_col];
+	  }
+	}
+    }
+    ierr = RecoverVelocity(&A[0],&F[0],nA);CHKERRQ(ierr);
+
+    // load velocities
+    for(q=0;q<nA;q++){
+      global_row = Amap[q];
+      const PetscInt *cone;
+      ierr = DMPlexGetCone(dm,global_row,&cone);CHKERRQ(ierr);
+      offset = -1;
+      if(cone[0] == v){
+	offset = 0;
+      }else if(cone[1] == v){
+	offset = 1;
+      }else{
+	CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE);
+      }
+      user->vel[DIM*(global_row-fStart)+offset] = F[q]; ///user->V[global_row]*0.5;
+    }
+
+    
+    ierr = DMPlexRestoreTransitiveClosure(dm,v,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);    
+  }
+
+  ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
 #define __FUNCT__ "main"
 int main(int argc, char **argv)
 {
@@ -701,10 +937,10 @@ int main(int argc, char **argv)
   ierr = KSPSetUp(ksp);CHKERRQ(ierr);
   ierr = KSPSolve(ksp,F,U);CHKERRQ(ierr);
 
-  L2Error(dm,U,&user);
 
-  ierr = CheckErrorSpatialDistribution(dm,K,F,&user);CHKERRQ(ierr);
-
+  //ierr = CheckErrorSpatialDistribution(dm,K,F,&user);CHKERRQ(ierr);
+  ierr = WheelerYotovRecoverVelocity(dm,U,&user);CHKERRQ(ierr);
+  ierr = L2Error(dm,U,&user);CHKERRQ(ierr);
   
   ierr = AppCtxDestroy(&user);CHKERRQ(ierr);
   ierr = MatDestroy(&K);CHKERRQ(ierr);
