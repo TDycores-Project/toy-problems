@@ -596,6 +596,8 @@ int main(int argc, char **argv)
   MPI_Comm          comm;
   PetscErrorCode    ierr;
   PetscMPIInt       rank;
+  size_t            len;
+
   ierr = PetscInitialize(&argc,&argv,(char*)0,help);CHKERRQ(ierr);
   comm = PETSC_COMM_WORLD;
   ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
@@ -606,11 +608,14 @@ int main(int argc, char **argv)
   PetscReal P = 0;
   user.exact  = 0;
   char filename[PETSC_MAX_PATH_LEN] = "../data/simple.e";
+  char exact_soln_filename[PETSC_MAX_PATH_LEN] = "\0";
+
   ierr = PetscOptionsBegin(comm,NULL,"Options","");CHKERRQ(ierr);
   ierr = PetscOptionsInt("-N","Number of elements in 1D","",N,&N,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsInt("-E","Which exact solution","",user.exact,&(user.exact),NULL);CHKERRQ(ierr);
   ierr = PetscOptionsReal("-P","set to 1 to enable perturbing mesh","",P,&P,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsString("-mesh","Exodus.II filename to read","",filename,filename,sizeof(filename),NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsString("-view_exact_soln","Filename for saving the exact solution","",exact_soln_filename,exact_soln_filename,sizeof(exact_soln_filename),NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
   // Create the mesh
@@ -705,6 +710,24 @@ int main(int argc, char **argv)
 
   ierr = CheckErrorSpatialDistribution(dm,K,F,&user);CHKERRQ(ierr);
 
+  // Save exact solution as binary file
+  ierr = PetscStrlen(exact_soln_filename, &len);
+  if (len){
+    PetscInt       c,cStart,cEnd;
+    PetscViewer viewer;
+    Vec P;
+
+    ierr = DMCreateGlobalVector(dm,&P);CHKERRQ(ierr);
+    ierr = DMPlexGetHeightStratum(dm,0,&cStart,&cEnd);CHKERRQ(ierr);
+    for(c=cStart;c<cEnd;c++){
+      ierr = VecSetValue(P,c,Pressure(user.X[c*DIM],user.X[c*DIM+1],&user),INSERT_VALUES);CHKERRQ(ierr);
+    }
+
+    ierr = PetscViewerBinaryOpen(PETSC_COMM_WORLD,exact_soln_filename,FILE_MODE_WRITE,&viewer);CHKERRQ(ierr);
+    ierr = VecView(P,viewer);CHKERRQ(ierr);
+    ierr = PetscViewerDestroy(&viewer);CHKERRQ(ierr);
+    ierr = VecDestroy(&P);CHKERRQ(ierr);
+  }
   
   ierr = AppCtxDestroy(&user);CHKERRQ(ierr);
   ierr = MatDestroy(&K);CHKERRQ(ierr);
