@@ -154,21 +154,28 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
     ierr = PetscSectionGetOffset(section,c,&offset);CHKERRQ(ierr);
     L2  += user->V[c]*PetscSqr(u[offset]-Pressure(user->X[(c-cStart)*2],user->X[(c-cStart)*2+1],user));
   }
+#ifndef __DEBUG__  
   printf("%e ",PetscSqrtReal(L2));
+#endif
   ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
 
   // Velocity
   L2 = 0;
   PetscScalar vx,vy,ve,v;
   for(f=fStart;f<fEnd;f++){
-    v = 0.5*(user->vel[DIM*(f-fStart)]+user->vel[DIM*(f-fStart)+1])/user->V[f]; // (v.n) at face centroid
+#ifdef __DEBUG__
+    printf("face %d: v = %f %f\n",f,user->vel[DIM*(f-fStart)],user->vel[DIM*(f-fStart)+1]);
+#endif
+    v = 0.5*(user->vel[DIM*(f-fStart)]+user->vel[DIM*(f-fStart)+1]); // (v.n) at face centroid
     Velocity(user->X[DIM*f],user->X[DIM*f+1],user->K,&vx,&vy,user);
     ve = vx*user->N[DIM*f] + vy*user->N[DIM*f+1]; // exact (v.n) at face centroid
     //printf("vel: (%f, %f)  v = [%f %f]  ve.n = %f v.n = %f\n",user->X[DIM*f],user->X[DIM*f+1],vx,vy,ve,v);
     L2 += PetscSqr(v-ve);
   }
+#ifndef __DEBUG__  
   printf("%e ",PetscSqrtReal(L2));
-
+#endif
+  
   // Divergence
   L2 = 0;
   PetscScalar div0,div,sign;
@@ -191,13 +198,15 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
 	v = verts[j];
 	Velocity(user->X[DIM*v],user->X[DIM*v+1],user->K,&vx,&vy,user);	
 	div0 += sign*(vx*user->N[DIM*f] + vy*user->N[DIM*f+1])*0.5*user->V[f];
-	div  += sign*user->vel[DIM*(f-fStart)+j]              *0.5*2.0;
+	div  += sign*user->vel[DIM*(f-fStart)+j]              *0.5*user->V[f];
       }
     }
     //printf("div: %e %e\n",div0,div);
     L2  += user->V[c]*PetscSqr(div-div0);
   }
+#ifndef __DEBUG__    
   printf("%e\n",PetscSqrtReal(L2));
+#endif
   
   PetscFunctionReturn(0);
 }
