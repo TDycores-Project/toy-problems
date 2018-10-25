@@ -657,10 +657,11 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
     ierr = DMPlexRestoreTransitiveClosure(dm,v,PETSC_FALSE,&closureSize,&closure);CHKERRQ(ierr);
 #ifdef __DEBUG__
     printf("A,B,G,C,D of vertex %2d\n",v);
+    printf("Amap = [ "); for(q=0;q<nA;q++) { printf("%d ",Amap[q]); }; printf("]\n");
     PrintMatrix(A,nA,nA,PETSC_FALSE);
     ierr = CheckSymmetric(A,nA);CHKERRQ(ierr);
     PrintMatrix(B,nA,nB,PETSC_FALSE);
-    PrintMatrix(G,nB,1 ,PETSC_FALSE);
+    PrintMatrix(G,nA,1 ,PETSC_FALSE);
 #endif
     ierr = FormStencil(&A[0],&B[0],&C[0],&G[0],&D[0],nA,nB);CHKERRQ(ierr);
 #ifdef __DEBUG__
