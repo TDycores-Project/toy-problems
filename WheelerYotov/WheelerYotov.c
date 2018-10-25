@@ -139,7 +139,7 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
 {
   PetscFunctionBegin;
   PetscErrorCode ierr;
-  PetscScalar *u,L2;
+  PetscScalar *u,L2p,L2v,L2d;
   PetscSection section;
   PetscInt c,cStart,cEnd,offset;
   PetscInt f,fStart,fEnd;
@@ -149,43 +149,22 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
 
   // Pressure
   ierr = DMGetDefaultSection(dm, &section);CHKERRQ(ierr);
-  L2 = 0;
+  L2p = 0;
   for(c=cStart;c<cEnd;c++){
     ierr = PetscSectionGetOffset(section,c,&offset);CHKERRQ(ierr);
-    L2  += user->V[c]*PetscSqr(u[offset]-Pressure(user->X[(c-cStart)*2],user->X[(c-cStart)*2+1],user));
+    L2p += user->V[c]*PetscSqr(u[offset]-Pressure(user->X[(c-cStart)*2],user->X[(c-cStart)*2+1],user));
   }
-#ifndef __DEBUG__  
-  printf("%e ",PetscSqrtReal(L2));
-#endif
   ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
 
-  // Velocity
-  L2 = 0;
-  PetscScalar vx,vy,ve,v;
-  for(f=fStart;f<fEnd;f++){
-#ifdef __DEBUG__
-    printf("face %d: v = %f %f\n",f,user->vel[DIM*(f-fStart)],user->vel[DIM*(f-fStart)+1]);
-#endif
-    v = 0.5*(user->vel[DIM*(f-fStart)]+user->vel[DIM*(f-fStart)+1]); // (v.n) at face centroid
-    Velocity(user->X[DIM*f],user->X[DIM*f+1],user->K,&vx,&vy,user);
-    ve = vx*user->N[DIM*f] + vy*user->N[DIM*f+1]; // exact (v.n) at face centroid
-    //printf("vel: (%f, %f)  v = [%f %f]  ve.n = %f v.n = %f\n",user->X[DIM*f],user->X[DIM*f+1],vx,vy,ve,v);
-    L2 += PetscSqr(v-ve);
-  }
-#ifndef __DEBUG__  
-  printf("%e ",PetscSqrtReal(L2));
-#endif
-  
-  // Divergence
-  L2 = 0;
-  PetscScalar div0,div,sign;
+  // Velocity and Divergence
+  L2v = 0; L2d = 0;
+  PetscScalar div0,div,flux0,flux,sign,vx,vy,vn;
   for(c=cStart;c<cEnd;c++){
     PetscInt v,i,j,nf;
     const PetscInt *faces;
     ierr = DMPlexGetConeSize(dm,c,&nf   );CHKERRQ(ierr);
     ierr = DMPlexGetCone    (dm,c,&faces);CHKERRQ(ierr);
-    div0 = 0;
-    div  = 0;
+    div0 = 0; div = 0; 
     for(i=0;i<nf;i++){
       f = faces[i];
       PetscInt nv;
@@ -194,18 +173,22 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
       ierr = DMPlexGetCone    (dm,f,&verts);CHKERRQ(ierr);
       sign = PetscSign(user->N[DIM*f  ]*(user->X[DIM*f  ]-user->X[DIM*c  ])+
 		       user->N[DIM*f+1]*(user->X[DIM*f+1]-user->X[DIM*c+1]));
+      flux0 = 0; flux = 0;
       for(j=0;j<nv;j++){
 	v = verts[j];
-	Velocity(user->X[DIM*v],user->X[DIM*v+1],user->K,&vx,&vy,user);	
-	div0 += sign*(vx*user->N[DIM*f] + vy*user->N[DIM*f+1])*0.5*user->V[f];
-	div  += sign*user->vel[DIM*(f-fStart)+j]              *0.5*user->V[f];
+	Velocity(user->X[DIM*v],user->X[DIM*v+1],user->K,&vx,&vy,user);
+	vn     = vx*user->N[DIM*f] + vy*user->N[DIM*f+1];
+	flux0 += sign*vn                         *0.5*user->V[f];
+	flux  += sign*user->vel[DIM*(f-fStart)+j]*0.5*user->V[f]; //*4; // <-- magic factor of 4?!!
+	div0  += flux0;
+	div   += flux; ///4; // <-- but don't use it in the diveregnce?!
       }
+      L2v += user->V[c]/user->V[f]*PetscSqr(flux-flux0);
     }
-    //printf("div: %e %e\n",div0,div);
-    L2  += user->V[c]*PetscSqr(div-div0);
+    L2d += user->V[c]*PetscSqr(div-div0);
   }
 #ifndef __DEBUG__    
-  printf("%e\n",PetscSqrtReal(L2));
+  printf("%e %e %e\n",PetscSqrtReal(L2p),PetscSqrtReal(L2v),PetscSqrtReal(L2d));
 #endif
   
   PetscFunctionReturn(0);
