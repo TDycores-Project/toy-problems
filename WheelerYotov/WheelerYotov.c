@@ -152,6 +152,9 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
   L2p = 0;
   for(c=cStart;c<cEnd;c++){
     ierr = PetscSectionGetOffset(section,c,&offset);CHKERRQ(ierr);
+#ifdef __DEBUG__
+    printf("cell %2d: p = %.15f, exact = %.15f\n",c,u[offset],Pressure(user->X[(c-cStart)*2],user->X[(c-cStart)*2+1],user));
+#endif
     L2p += user->V[c]*PetscSqr(u[offset]-Pressure(user->X[(c-cStart)*2],user->X[(c-cStart)*2+1],user));
   }
   ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
@@ -159,6 +162,13 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
   // Velocity and Divergence
   L2v = 0; L2d = 0;
   PetscScalar div0,div,flux0,flux,sign,vx,vy,vn;
+#ifdef __DEBUG__
+  for(f=fStart;f<fEnd;f++){
+    Velocity(user->X[DIM*f],user->X[DIM*f+1],user->K,&vx,&vy,user);
+    vn = vx*user->N[DIM*f] + vy*user->N[DIM*f+1];
+    printf("face %3d: vel = %.15f %.15f, exact = %.15f\n",f,user->vel[DIM*(f-fStart)],user->vel[DIM*(f-fStart)+1],vn);
+  }
+#endif
   for(c=cStart;c<cEnd;c++){
     PetscInt v,i,j,nf;
     const PetscInt *faces;
@@ -806,7 +816,7 @@ PetscErrorCode WheelerYotovRecoverVelocity(DM dm,Vec U,AppCtx *user)
       }else{
 	CHKERRQ(PETSC_ERR_ARG_OUTOFRANGE);
       }
-      user->vel[DIM*(global_row-fStart)+offset] = F[q]; ///user->V[global_row]*0.5;
+      user->vel[DIM*(global_row-fStart)+offset] = F[q]; 
     }
 
     
