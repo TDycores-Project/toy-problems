@@ -189,9 +189,9 @@ PetscErrorCode L2Error(DM dm,Vec U,AppCtx *user)
 	Velocity(user->X[DIM*v],user->X[DIM*v+1],user->K,&vx,&vy,user);
 	vn     = vx*user->N[DIM*f] + vy*user->N[DIM*f+1];
 	flux0 += sign*vn                         *0.5*user->V[f];
-	flux  += sign*user->vel[DIM*(f-fStart)+j]*0.5*user->V[f]; //*4; // <-- magic factor of 4?!!
+	flux  += sign*user->vel[DIM*(f-fStart)+j]*0.5*user->V[f]; 
 	div0  += flux0;
-	div   += flux; ///4; // <-- but don't use it in the diveregnce?!
+	div   += flux; 
       }
       L2v += user->V[c]/user->V[f]*PetscSqr(flux-flux0);
     }
@@ -505,6 +505,7 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
   PetscInt i,q,nq = 4;
   PetscReal wgt   = 0.25; // 1/s from the paper
   PetscReal Ehat  = 4;    // area of ref element ( [-1,1] x [-1,1] )
+  PetscReal ehat  = 2;
   PetscScalar x[DIM*nq],DF[DIM*DIM*nq],DFinv[DIM*DIM*nq],J[nq],Kinv[DIM*DIM];
 
   // using quadrature points as a local numbering, what are the
@@ -525,19 +526,19 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
       i = c*(DIM*DIM*nq)+q*(DIM*DIM);
       user->Alocal[i  ]  = (Kinv[0]*n0[q*DIM] + Kinv[2]*n0[q*DIM+1])*n0[q*DIM  ]; // (K n0, n0)
       user->Alocal[i  ] += (Kinv[1]*n0[q*DIM] + Kinv[3]*n0[q*DIM+1])*n0[q*DIM+1];
-      user->Alocal[i  ] *= Ehat*wgt;
+      user->Alocal[i  ] *= Ehat/ehat/ehat*wgt;
       user->Alocal[i+1]  = (Kinv[0]*n1[q*DIM] + Kinv[2]*n1[q*DIM+1])*n0[q*DIM  ]; // (K n1, n0)
       user->Alocal[i+1] += (Kinv[1]*n1[q*DIM] + Kinv[3]*n1[q*DIM+1])*n0[q*DIM+1];
-      user->Alocal[i+1] *= Ehat*wgt;
+      user->Alocal[i+1] *= Ehat/ehat/ehat*wgt;
       user->Alocal[i+2]  = (Kinv[0]*n0[q*DIM] + Kinv[2]*n0[q*DIM+1])*n1[q*DIM  ]; // (K n0, n1)
       user->Alocal[i+2] += (Kinv[1]*n0[q*DIM] + Kinv[3]*n0[q*DIM+1])*n1[q*DIM+1];
-      user->Alocal[i+2] *= Ehat*wgt;
+      user->Alocal[i+2] *= Ehat/ehat/ehat*wgt;
       user->Alocal[i+3]  = (Kinv[0]*n1[q*DIM] + Kinv[2]*n1[q*DIM+1])*n1[q*DIM  ]; // (K n1, n1)
       user->Alocal[i+3] += (Kinv[1]*n1[q*DIM] + Kinv[3]*n1[q*DIM+1])*n1[q*DIM+1];
-      user->Alocal[i+3] *= Ehat*wgt;
+      user->Alocal[i+3] *= Ehat/ehat/ehat*wgt;
 
       // integrate the forcing function using the same quadrature
-      user->Flocal[c] += Forcing(x[q*DIM],x[q*DIM+1],user->K,user)*wgt*J[q];
+      user->Flocal[c] += Forcing(x[q*DIM],x[q*DIM+1],user->K,user)*J[q];
     }
   }
 
@@ -548,6 +549,7 @@ PetscErrorCode WYLocalElementCompute(DM dm,AppCtx *user)
     for(q=0;q<nq;q++){
       printf("  vertex %d\n",q);
       PrintMatrix(&(user->Alocal[c*(DIM*DIM*nq)+q*(DIM*DIM)]),2,2,PETSC_FALSE);
+      PrintMatrix(&(DF[DIM*DIM*q]),2,2,PETSC_FALSE);
     }
   }
 #endif
@@ -660,6 +662,7 @@ PetscErrorCode WheelerYotovSystem(DM dm,Mat K, Vec F,AppCtx *user)
 #ifdef __DEBUG__
     printf("A,B,G,C,D of vertex %2d\n",v);
     printf("Amap = [ "); for(q=0;q<nA;q++) { printf("%d ",Amap[q]); }; printf("]\n");
+    printf("Bmap = [ "); for(q=0;q<nB;q++) { printf("%d ",Bmap[q]); }; printf("]\n");
     PrintMatrix(A,nA,nA,PETSC_FALSE);
     ierr = CheckSymmetric(A,nA);CHKERRQ(ierr);
     PrintMatrix(B,nA,nB,PETSC_FALSE);
@@ -801,7 +804,15 @@ PetscErrorCode WheelerYotovRecoverVelocity(DM dm,Vec U,AppCtx *user)
 	  }
 	}
     }
+#ifdef __DEBUG__
+    printf("Recovery at vertex %3d:\n",v);
+    PrintMatrix(A,nA,nA,PETSC_FALSE);
+    PrintMatrix(F,1,nA,PETSC_FALSE);
+#endif
     ierr = RecoverVelocity(&A[0],&F[0],nA);CHKERRQ(ierr);
+#ifdef __DEBUG__
+    PrintMatrix(F,1,nA,PETSC_FALSE);
+#endif
 
     // load velocities
     for(q=0;q<nA;q++){
@@ -947,7 +958,7 @@ int main(int argc, char **argv)
   ierr = KSPSolve(ksp,F,U);CHKERRQ(ierr);
 
 
-  //ierr = CheckErrorSpatialDistribution(dm,K,F,&user);CHKERRQ(ierr);
+  ierr = CheckErrorSpatialDistribution(dm,K,F,&user);CHKERRQ(ierr);
   ierr = WheelerYotovRecoverVelocity(dm,U,&user);CHKERRQ(ierr);
   ierr = L2Error(dm,U,&user);CHKERRQ(ierr);
   
