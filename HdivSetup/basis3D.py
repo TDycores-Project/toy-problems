@@ -1,6 +1,8 @@
 from sympy import *
 import numpy as np
 
+petsc = True
+
 def div(v):
     d  = diff(v[0],x)
     d += diff(v[1],y)
@@ -33,88 +35,42 @@ BDDF1 += t0*curl([0       ,x*y*z   ,0       ])
 BDDF1 += t1*curl([0       ,x**2*z  ,0       ])
 BDDF1 += t2*curl([0       ,y*z**2  ,0       ])
 BDDF1 += t3*curl([0       ,x*y*z**2,0       ])
-print(div(BDDF1))
 
-v11,v12,v13,v21,v22,v23,v31,v32,v33,v41,v42,v43 = symbols("v11 v12 v13 v21 v22 v23 v31 v32 v33 v41 v42 v43")
-v51,v52,v53,v61,v62,v63,v71,v72,v73,v81,v82,v83 = symbols("v51 v52 v53 v61 v62 v63 v71 v72 v73 v81 v82 v83")
+for i in range(8): # for each vertex
+    for j in range(3): # for each direction
+        k = 3*i+j
 
-U = [a0,b0,c0,d0,a1,b1,c1,d1,a2,b2,c2,d2,r0,r1,r2,r3,s0,s1,s2,s3,t0,t1,t2,t3]
-V = [v11,v12,v13,v21,v22,v23,v31,v32,v33,v41,v42,v43,v51,v52,v53,v61,v62,v63,v71,v72,v73,v81,v82,v83]
+        eqs = []
+        for v in [{x:-1,y:-1,z:-1},
+                  {x:+1,y:-1,z:-1},
+                  {x:-1,y:+1,z:-1},
+                  {x:+1,y:+1,z:-1},
+                  {x:-1,y:-1,z:+1},
+                  {x:+1,y:-1,z:+1},
+                  {x:-1,y:+1,z:+1},
+                  {x:+1,y:+1,z:+1}]:
+            for l,d in enumerate([x,y,z]): # the outward normal at evaluated at each vertex/direction
+                n = np.zeros(3,dtype=int)
+                n[l] = v[d]
+                eqs.append(np.dot(BDDF1,n).subs(v))
         
-eqs = (v11 - -BDDF1[0].subs({x:-1,y:-1,z:-1}),
-       v12 - -BDDF1[1].subs({x:-1,y:-1,z:-1}),
-       v13 - -BDDF1[2].subs({x:-1,y:-1,z:-1}),
-
-       v21 - +BDDF1[0].subs({x:+1,y:-1,z:-1}),
-       v22 - -BDDF1[1].subs({x:+1,y:-1,z:-1}),
-       v23 - -BDDF1[2].subs({x:+1,y:-1,z:-1}),
-
-       v31 - -BDDF1[0].subs({x:-1,y:+1,z:-1}),
-       v32 - +BDDF1[1].subs({x:-1,y:+1,z:-1}),
-       v33 - -BDDF1[2].subs({x:-1,y:+1,z:-1}),
-
-       v41 - +BDDF1[0].subs({x:+1,y:+1,z:-1}),
-       v42 - +BDDF1[1].subs({x:+1,y:+1,z:-1}),
-       v43 - -BDDF1[2].subs({x:+1,y:+1,z:-1}),
-       
-       v51 - -BDDF1[0].subs({x:-1,y:-1,z:+1}),
-       v52 - -BDDF1[1].subs({x:-1,y:-1,z:+1}),
-       v53 - +BDDF1[2].subs({x:-1,y:-1,z:+1}),
-
-       v61 - +BDDF1[0].subs({x:+1,y:-1,z:+1}),
-       v62 - -BDDF1[1].subs({x:+1,y:-1,z:+1}),
-       v63 - +BDDF1[2].subs({x:+1,y:-1,z:+1}),
-
-       v71 - -BDDF1[0].subs({x:-1,y:+1,z:+1}),
-       v72 - +BDDF1[1].subs({x:-1,y:+1,z:+1}),
-       v73 - +BDDF1[2].subs({x:-1,y:+1,z:+1}),
-
-       v81 - +BDDF1[0].subs({x:+1,y:+1,z:+1}),
-       v82 - +BDDF1[1].subs({x:+1,y:+1,z:+1}),
-       v83 - +BDDF1[2].subs({x:+1,y:+1,z:+1}))
-
-sol = solve(eqs)    
-    
-BDDF1[0] = collect(expand(BDDF1[0].subs(sol)),V)
-BDDF1[1] = collect(expand(BDDF1[1].subs(sol)),V)
-BDDF1[2] = collect(expand(BDDF1[2].subs(sol)),V)
-
- 
-def petsc(s):
-    return s.replace("x","x[0]").replace("y","x[1]").replace("z","x[2]").replace("= 0","= +0")
-
-if True:
-    print(petsc("B[0]  = %s;" % (BDDF1[0].coeff(v11).evalf())))
-    print(petsc("B[1]  = %s;" % (BDDF1[1].coeff(v12).evalf())))
-    print(petsc("B[2]  = %s;" % (BDDF1[2].coeff(v13).evalf())))
-
-    print(petsc("B[3]  = %s;" % (BDDF1[0].coeff(v21).evalf())))
-    print(petsc("B[4]  = %s;" % (BDDF1[1].coeff(v22).evalf())))
-    print(petsc("B[5]  = %s;" % (BDDF1[2].coeff(v23).evalf())))
-
-    print(petsc("B[6]  = %s;" % (BDDF1[0].coeff(v31).evalf())))
-    print(petsc("B[7]  = %s;" % (BDDF1[1].coeff(v32).evalf())))
-    print(petsc("B[8]  = %s;" % (BDDF1[2].coeff(v33).evalf())))
-
-    print(petsc("B[9]  = %s;" % (BDDF1[0].coeff(v41).evalf())))
-    print(petsc("B[10] = %s;" % (BDDF1[1].coeff(v42).evalf())))
-    print(petsc("B[11] = %s;" % (BDDF1[2].coeff(v43).evalf())))
-
-    print(petsc("B[12] = %s;" % (BDDF1[0].coeff(v51).evalf())))
-    print(petsc("B[13] = %s;" % (BDDF1[1].coeff(v52).evalf())))
-    print(petsc("B[14] = %s;" % (BDDF1[2].coeff(v53).evalf())))
-
-    print(petsc("B[15] = %s;" % (BDDF1[0].coeff(v61).evalf())))
-    print(petsc("B[16] = %s;" % (BDDF1[1].coeff(v62).evalf())))
-    print(petsc("B[17] = %s;" % (BDDF1[2].coeff(v63).evalf())))
-
-    print(petsc("B[18] = %s;" % (BDDF1[0].coeff(v71).evalf())))
-    print(petsc("B[19] = %s;" % (BDDF1[1].coeff(v72).evalf())))
-    print(petsc("B[20] = %s;" % (BDDF1[2].coeff(v73).evalf())))
-
-    print(petsc("B[21] = %s;" % (BDDF1[0].coeff(v81).evalf())))
-    print(petsc("B[22] = %s;" % (BDDF1[1].coeff(v82).evalf())))
-    print(petsc("B[23] = %s;" % (BDDF1[2].coeff(v83).evalf())))
-
-    
-
+        eqs[k] -= 1 # the k^th functions should be a 1, rest are 0
+        sol = solve(eqs)
+        ux = BDDF1[0].subs(sol)
+        uy = BDDF1[1].subs(sol)
+        uz = BDDF1[2].subs(sol)
+        
+        if petsc:
+            def _f(fcn):
+                fcn = fcn.replace("x**2","x*x")
+                fcn = fcn.replace("y**2","y*y")
+                fcn = fcn.replace("z**2","z*z")
+                fcn = fcn.replace("x","x[0]")
+                fcn = fcn.replace("y","x[1]")
+                fcn = fcn.replace("z","x[2]")
+                if "/8" in fcn: fcn = "(%s)*0.125;" % (fcn.replace("/8",""))
+                if "/16" in fcn: fcn = "(%s)*0.0625;" % (fcn.replace("/16",""))
+                return fcn
+            print("B[%2d] = " % (3*k)   + _f("%s" % (ux)))
+            print("B[%2d] = " % (3*k+1) + _f("%s" % (uy)))
+            print("B[%2d] = " % (3*k+2) + _f("%s" % (uz)))
