@@ -1,5 +1,6 @@
 #include <petsc.h>
-
+#include "petscfetypes.h"
+#include "petsc/private/petscfeimpl.h"
 /*
   This basis was constructed by (1) starting with the hexahedral basis
   found in (Wheeler,Xue,Yotov 2012), but omitting the addition of
@@ -37,6 +38,7 @@ static PetscErrorCode PetscSpaceEvaluate_HdivPrism(PetscSpace sp, PetscInt npoin
     B[54*p+ 7] =  y;
     B[54*p+10] =  z;
     B[54*p+14] =  1;
+    B[54*p+17] =  x;
     B[54*p+20] =  y;
     B[54*p+23] =  z;
     B[54*p+24] =  x*z;
@@ -44,7 +46,7 @@ static PetscErrorCode PetscSpaceEvaluate_HdivPrism(PetscSpace sp, PetscInt npoin
     B[54*p+28] = -2*x*z;
     B[54*p+30] =  0.333333333333333*x*x - 0.333333333333333*x*y + 0.577350269189626*y;
     B[54*p+31] =  0.666666666666667*x*y;
-    B[54*p+32] = -1.33333333333333*x*z + 0.333333333333333*y*z;
+    B[54*p+32] = -1.333333333333333*x*z + 0.333333333333333*y*z;
     B[54*p+34] =  2*y*z;
     B[54*p+35] = -z*z;
     B[54*p+36] = -0.707106781186547*x + 0.707106781186547;
@@ -56,7 +58,7 @@ static PetscErrorCode PetscSpaceEvaluate_HdivPrism(PetscSpace sp, PetscInt npoin
     B[54*p+46] = -0.333333333333333*x*y;
     B[54*p+47] =  1.666666666666667*x*z + 0.333333333333333*y*z;
     B[54*p+48] = -2*y*z;
-    B[54*p+51] =  z; 
+    B[54*p+51] = -z;
   }
   PetscFunctionReturn(0);
 }
@@ -66,7 +68,19 @@ int main(int argc, char **argv)
   PetscErrorCode ierr;
   ierr = PetscInitialize(&argc,&argv,NULL,NULL);CHKERRQ(ierr);
 
-  
+  PetscSpace sp;
+  const PetscReal x[3] = {+0.12345,-0.54321,+0.32145};
+  PetscReal B[54];
+  ierr = PetscMemzero(B,54*sizeof(PetscReal));CHKERRQ(ierr);
+  ierr = PetscSpaceCreate(PETSC_COMM_WORLD,&sp);CHKERRQ(ierr);
+  ierr = PetscSpaceSetNumComponents(sp,3);CHKERRQ(ierr);  
+  sp->Nv = 3; // didn't see a mutator
+  ierr = PetscSpaceEvaluate_HdivPrism(sp,1,x,B,NULL,NULL);CHKERRQ(ierr);
+
+  PetscInt i;
+  for(i=0;i<54;i++){
+    printf("%+1.8e\n",B[i]);
+  }
   ierr = PetscFinalize();CHKERRQ(ierr);
   return ierr;
 }
