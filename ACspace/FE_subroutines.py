@@ -98,6 +98,7 @@ def BDMbasis(coord_E,x,y):
             eqs[k] -= 1
             sol = solve(eqs)
             V = VBDM(x,y) 
+            print(V[0])
             vx = V[0]
             vy = V[1]
             ux = vx.subs(sol)
@@ -116,14 +117,17 @@ def VACred(coord_E, x, y, xhat, yhat):
     and xhat, yhat is defined on Ehat
     """
     # sigma_hat_1 = curl((1-xhat^2)*yhat)
-    sghat1 = [[1-xhat^2],[2*xhat*yhat]] 
+    #sghat1 = [[1-xhat^2],[2*xhat*yhat]] 
+    sghat1 = [[xhat**2],[-2*xhat*yhat]] 
     # sigma_hat_2 = curl((1-yhat^2)*xhat)
-    sghat2 = [[-2*xhat*yhat],[yhat^2-1]] 
+    #sghat2 = [[-2*xhat*yhat],[yhat^2-1]] 
+    sghat2 = [[2*xhat*yhat],[-yhat**2]]
+
     Xhat = [[xhat],[yhat]]
     X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
     # sigma_i = P_E*sigma_hat_i
-    sg1 = (DF_E/J_E)*sghat1
-    sg2 = (DF_E/J_E)*sghat2
+    sg1 = np.matmul(DF_E/J_E,sghat1)
+    sg2 = np.matmul(DF_E/J_E,sghat2)
 
     a1,a2,b1,b2,g1,g2,r,s = symbols('a1 a2 b1 b2 g1 g2 r s')
     vx  = a1*x + b1*y + g1 + r*sg1[0][0] + s*sg2[0][0]
@@ -145,26 +149,28 @@ def ACbasis(coord_E,x,y):
     ------
     AC reduce basis function on element E in terms of (x,y)
     """
-    # I need this for computing V after solve
-    xhat = [-1,1,-1,1]
-    yhat = [-1,-1,1,1]
 
     basis = []
     for i in range(4):
         for j in range(2):
             k = 2*i+j
             eqs = [ np.dot(VACred(coord_E,coord_E[0][0], coord_E[0][1],-1,-1),[-1, 0]),
-                    np.dot(VACred(coord_E,coord_E[0][0], coord_E[0][1],-1,-1),[0,-1]),
-                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1],1,-1),[1, 0]),
-                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1],1,-1),[0,-1]),
-                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],-1,1),[-1, 0]),
-                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],-1,1),[0, 1]),
-                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1],1,1),[1, 0]),
-                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1],1,1),[0, 1])]
-
+                    np.dot(VACred(coord_E,coord_E[0][0], coord_E[0][1],-1,-1),[ 0,-1]),
+                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1], 1,-1),[ 1, 0]),
+                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1], 1,-1),[ 0,-1]),
+                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],-1, 1),[-1, 0]),
+                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],-1, 1),[ 0, 1]),
+                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1], 1, 1),[ 1, 0]),
+                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1], 1, 1),[ 0, 1])]
             eqs[k] -= 1
             sol = solve(eqs)
-            V = VACred(coord_E, x, y, xhat[i], yhat[i]) 
+            # we need to find 
+            Xhat = [[x],[y]]
+            X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
+            xhat = X[0][0]
+            yhat = X[1][0]
+            V = VACred(coord_E, x, y, xhat, yhat) 
+            print(V[0])
             vx = V[0]
             vy = V[1]
             ux = vx.subs(sol)
@@ -179,9 +185,8 @@ coord_E = [[-1.,-1.],
            [-1.,1.],
            [1.,1.]]
 
-AC = ACbasis(coord_E,0,0)
+AC = ACbasis(coord_E,1,-1)
 print(AC)
-
-x, y = symbols('x y')
-BDM = BDMbasis(coord_E,x,y)
+print('===========================')
+BDM = BDMbasis(coord_E,1,-1)
 print(BDM)
