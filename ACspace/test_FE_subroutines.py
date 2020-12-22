@@ -1,5 +1,6 @@
 import unittest
 import FE_subroutines as FE
+import numpy as np
 
 class TestPiolaTransformation(unittest.TestCase):
 
@@ -18,7 +19,7 @@ class TestPiolaTransformation(unittest.TestCase):
         self.assertEqual(DF_E[0][0],0.5)
         self.assertEqual(DF_E[0][1],0.)
         self.assertEqual(DF_E[1][1],0.5)
-        
+
     def test_Piola2(self):
         coord_E = [[0.,0.],
                    [1.,0.],
@@ -34,6 +35,19 @@ class TestPiolaTransformation(unittest.TestCase):
         self.assertEqual(DF_E[0][0],0.5)
         self.assertEqual(DF_E[0][1],0.)
         self.assertEqual(DF_E[1][1],0.5)
+
+
+class TestBDMbasis(unittest.TestCase):
+
+    def test_BDMbasis1(self):
+        coord_E = [[-1.,-1.],
+                   [1.,-1.],
+                   [-1.,1.],
+                   [1.,1.]]
+        BDM = FE.BDMbasis(coord_E,-1,-1)
+        self.assertEqual(np.dot([BDM[0],BDM[1]],[-1,0]),1.0)
+        self.assertEqual(np.dot([BDM[2],BDM[3]],[0,-1]),1.0)
+        self.assertEqual(np.dot([BDM[4],BDM[5]],[1,0]),0.0)
 
 
 def main():
