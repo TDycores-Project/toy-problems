@@ -98,7 +98,6 @@ def BDMbasis(coord_E,x,y):
             eqs[k] -= 1
             sol = solve(eqs)
             V = VBDM(x,y) 
-            print(V[0])
             vx = V[0]
             vy = V[1]
             ux = vx.subs(sol)
@@ -118,9 +117,11 @@ def VACred(coord_E, x, y, xhat, yhat):
     """
     # sigma_hat_1 = curl((1-xhat^2)*yhat)
     #sghat1 = [[1-xhat^2],[2*xhat*yhat]] 
+    # for debugging define the supplement as BDM
     sghat1 = [[xhat**2],[-2*xhat*yhat]] 
     # sigma_hat_2 = curl((1-yhat^2)*xhat)
     #sghat2 = [[-2*xhat*yhat],[yhat^2-1]] 
+    # for debugging define the supplement as BDM
     sghat2 = [[2*xhat*yhat],[-yhat**2]]
 
     Xhat = [[xhat],[yhat]]
@@ -164,13 +165,13 @@ def ACbasis(coord_E,x,y):
                     np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1], 1, 1),[ 0, 1])]
             eqs[k] -= 1
             sol = solve(eqs)
-            # we need to find 
+            # Define the inverse Piola to find (xhat,yhat) corresponds to (x,y) in E
             Xhat = [[x],[y]]
             X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
+            # this works because now E = Ehat
             xhat = X[0][0]
             yhat = X[1][0]
             V = VACred(coord_E, x, y, xhat, yhat) 
-            print(V[0])
             vx = V[0]
             vy = V[1]
             ux = vx.subs(sol)
@@ -184,9 +185,10 @@ coord_E = [[-1.,-1.],
            [1.,-1.],
            [-1.,1.],
            [1.,1.]]
-
-AC = ACbasis(coord_E,1,-1)
+x = 0
+y = 0
+AC = ACbasis(coord_E,x,y)
 print(AC)
 print('===========================')
-BDM = BDMbasis(coord_E,1,-1)
+BDM = BDMbasis(coord_E,x,y)
 print(BDM)
