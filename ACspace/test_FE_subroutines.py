@@ -5,10 +5,15 @@ import numpy as np
 class TestPiolaTransformation(unittest.TestCase):
 
     def test_Piola1(self):
+        """ Note 
+        2---3
+        |   |
+        0---1
+        """
         coord_E = [[0.,0.],
                    [1.,0.],
-                   [1.,1.],
-                   [0.,1.]]
+                   [0.,1.],
+                   [1.,1.]]
         Xhat = [[-1],
                 [-1]]
         X, DF_E, J_E = FE.PiolaTransform(coord_E, Xhat)
@@ -21,10 +26,15 @@ class TestPiolaTransformation(unittest.TestCase):
         self.assertEqual(DF_E[1][1],0.5)
 
     def test_Piola2(self):
+        """ Note 
+        2---3
+        |   |
+        0---1
+        """
         coord_E = [[0.,0.],
                    [1.,0.],
-                   [1.,1.],
-                   [0.,1.]]
+                   [0.,1.],
+                   [1.,1.]]
         Xhat = [[0.],
                 [0.]]
         X, DF_E, J_E = FE.PiolaTransform(coord_E, Xhat)
@@ -40,6 +50,11 @@ class TestPiolaTransformation(unittest.TestCase):
 class TestBDMbasis(unittest.TestCase):
 
     def test_BDMbasis1(self):
+        """ Note 
+        2---3
+        |   |
+        0---1
+        """
         coord_E = [[-1.,-1.],
                    [1.,-1.],
                    [-1.,1.],

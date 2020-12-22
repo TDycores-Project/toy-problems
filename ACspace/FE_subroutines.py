@@ -20,8 +20,10 @@ def PiolaTransform(coord_E, Xhat):
     coord_E = [[x0,y0],
                [x1,y1],
                [x2,y2],
-               [x3,y3]]
-
+               [x3,y3]] with vertices numbering
+    2----3
+    |    |
+    0----1
     Xhat = [[xhat],[yhat]] vector in Ehat
     Output:
     ------
@@ -35,13 +37,13 @@ def PiolaTransform(coord_E, Xhat):
     yhat = Xhat[1][0]
     P = 0.25 * np.array([[(1-xhat)*(1-yhat),
                           (1+xhat)*(1-yhat),
-                          (1+xhat)*(1+yhat),
-                          (1-xhat)*(1+yhat)]])
+                          (1-xhat)*(1+yhat),
+                          (1+xhat)*(1+yhat)]])
     # x=F_E(xhat)
     X =np.transpose(np.matmul(P, coord_E))
     # gradient of P, 1st row = dP/dxhat, 2nd row=dP/dyhat
-    GradP = 0.25 * np.array([[-(1-yhat),(1-yhat),(1+yhat),-(1+yhat)],
-                             [-(1-xhat),-(1+xhat),(1+xhat),(1-xhat)]])
+    GradP = 0.25 * np.array([[-(1-yhat),(1-yhat),-(1+yhat),(1+yhat)],
+                             [-(1-xhat),-(1+xhat),(1-xhat),(1+xhat)]])
 
     # DF_E = [[dx/dxhat, dx/dyhat],
     #         [dy/dxhat, dy/dyhat]]
@@ -73,9 +75,9 @@ def BDMbasis(coord_E,x,y):
     x, y = symbols('x y')           
     BDM = BDMbasis(coord_E,x,y)  
     Note that vertices here are
-    3---4
+    2---3
     |   |
-    1---2
+    0---1
     like PETSc
     Output:
     ------
@@ -135,16 +137,16 @@ def ACbasis(coord_E,x,y):
     ------
     coord_E: is the coordinate of vertices of element.
     x,y: basis is evaluated at (x,y)
-    Note that vertices here are
-    4---3
+    Note
+    2---3
     |   |
-    1---2
+    0---1
     Output:
     ------
     AC reduce basis function on element E in terms of (x,y)
     """
     # I need this for computing V after solve
-    xhat = [-1,1,1,-1]
+    xhat = [-1,1,-1,1]
     yhat = [-1,-1,1,1]
 
     basis = []
@@ -152,13 +154,14 @@ def ACbasis(coord_E,x,y):
         for j in range(2):
             k = 2*i+j
             eqs = [ np.dot(VACred(coord_E,coord_E[0][0], coord_E[0][1],-1,-1),[-1, 0]),
-                    np.dot(VACred(coord_E,coord_E[0][0], coord_E[0][1],-1,-1),[ 0,-1]),
-                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1],1,-1),[ 1, 0]),
-                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1],1,-1),[ 0,-1]),
-                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],1,1),[1, 0]),
-                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],1,1),[ 0, 1]),
-                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1],-1,1),[ -1, 0]),
-                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1],-1,1),[ 0, 1])]
+                    np.dot(VACred(coord_E,coord_E[0][0], coord_E[0][1],-1,-1),[0,-1]),
+                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1],1,-1),[1, 0]),
+                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1],1,-1),[0,-1]),
+                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],-1,1),[-1, 0]),
+                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],-1,1),[0, 1]),
+                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1],1,1),[1, 0]),
+                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1],1,1),[0, 1])]
+
             eqs[k] -= 1
             sol = solve(eqs)
             V = VACred(coord_E, x, y, xhat[i], yhat[i]) 
@@ -173,8 +176,8 @@ def ACbasis(coord_E,x,y):
 
 coord_E = [[-1.,-1.],
            [1.,-1.],
-           [1.,1.],
-           [-1.,1.]]
+           [-1.,1.],
+           [1.,1.]]
 
 AC = ACbasis(coord_E,0,0)
 print(AC)
