@@ -165,10 +165,10 @@ def ACbasis(coord_E,xhat,yhat):
                     np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1], 1, 1),[ 0, 1])]
             eqs[k] -= 1
             sol = solve(eqs)
-            # Define the inverse Piola to find (xhat,yhat) corresponds to (x,y) in E
+            # Using Piola we find (x,y) in E based on input (xhat, yhat)
             Xhat = [[xhat],[yhat]]
             X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
-            # this works because now E = Ehat
+            # (x,y) in E is
             x = X[0][0]
             y = X[1][0]
             V = VACred(coord_E, x, y, xhat, yhat) 
