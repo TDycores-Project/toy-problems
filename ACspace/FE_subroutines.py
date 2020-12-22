@@ -6,8 +6,9 @@ See TODD ARBOGAST, MAICON R. CORREA, SIAM journal 2016
 import numpy as np
 import math
 import sys
+from sympy import *
 
-def PiolaTransform(coord_E,Xhat):
+def PiolaTransform(coord_E, Xhat):
     """ This function maps Xhat=(xhat,yhat) in Ehat=[-1,1]^2 
     to X=(x,y) in E.
     or vector vhat in Ehat to v in E.
@@ -45,10 +46,52 @@ def PiolaTransform(coord_E,Xhat):
     DF_E = np.transpose(np.matmul(GradP, coord_E))
     J_E = np.linalg.det(DF_E)
 
-    # now we can transform vector vhat to v by
-    # v = (DF_E/J_E)*vhat
+    # now we can transform vector vhat to v by eq. (3.4)
+    # v(x) = P_E(vhat)(x) = (DF_E/J_E)*vhat(xhat)
 
     return X, DF_E, J_E
 
+def Vspace(x, y):
 
+    a1,a2,b1,b2,g1,g2,r,s = symbols('a1 a2 b1 b2 g1 g2 r s')
+    vx  = a1*x + b1*y + g1 + r*x**2 + 2*s*x*y
+    vy  = a2*x + b2*y + g2 - 2*r*x*y - s*y**2
+    V = [vx, vy]
+    return V
+
+def ACbasis(coord_E):
+    
+    basis = []
+    for i in range(4):
+        for j in range(2):
+            k = 2*i+j
+            eqs = [ np.dot(Vspace(coord_E[0][0], coord_E[0][1]),[-1, 0]),
+                    np.dot(Vspace(coord_E[0][0], coord_E[0][1]),[ 0,-1]),
+                    np.dot(Vspace(coord_E[1][0], coord_E[1][1]),[ 1, 0]),
+                    np.dot(Vspace(coord_E[1][0], coord_E[1][1]),[ 0,-1]),
+                    np.dot(Vspace(coord_E[2][0], coord_E[2][1]),[-1, 0]),
+                    np.dot(Vspace(coord_E[2][0], coord_E[2][1]),[ 0, 1]),
+                    np.dot(Vspace(coord_E[3][0], coord_E[3][1]),[ 1, 0]),
+                    np.dot(Vspace(coord_E[3][0], coord_E[3][1]),[ 0, 1])]
+            eqs[k] -= 1
+            sol = solve(eqs)
+            x, y = symbols('x y')    
+            V = Vspace(x,y) 
+            vx = V[0]
+            vy = V[1]
+            ux = vx.subs(sol)
+            uy = vy.subs(sol)
+
+            basis.append(ux)
+            basis.append(uy)
+
+
+
+    return basis
+coord_E = [[-1.,-1.],
+           [1.,-1.],
+           [-1.,1.],
+           [1.,1.]]
+basis = ACbasis(coord_E)
+print(basis[15])
 
