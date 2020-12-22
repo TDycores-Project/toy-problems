@@ -116,13 +116,13 @@ def VACred(coord_E, x, y, xhat, yhat):
     and xhat, yhat is defined on Ehat
     """
     # sigma_hat_1 = curl((1-xhat^2)*yhat)
-    #sghat1 = [[1-xhat^2],[2*xhat*yhat]] 
+    sghat1 = [[1-xhat**2],[2*xhat*yhat]] 
     # for debugging define the supplement as BDM
-    sghat1 = [[xhat**2],[-2*xhat*yhat]] 
+    # sghat1 = [[xhat**2],[-2*xhat*yhat]] 
     # sigma_hat_2 = curl((1-yhat^2)*xhat)
-    #sghat2 = [[-2*xhat*yhat],[yhat^2-1]] 
+    sghat2 = [[-2*xhat*yhat],[yhat**2-1]] 
     # for debugging define the supplement as BDM
-    sghat2 = [[2*xhat*yhat],[-yhat**2]]
+    #sghat2 = [[2*xhat*yhat],[-yhat**2]]
 
     Xhat = [[xhat],[yhat]]
     X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
@@ -136,19 +136,19 @@ def VACred(coord_E, x, y, xhat, yhat):
     V = [vx, vy]
     return V
 
-def ACbasis(coord_E,x,y):
+def ACbasis(coord_E,xhat,yhat):
     """
     Input:
     ------
     coord_E: is the coordinate of vertices of element.
-    x,y: basis is evaluated at (x,y)
+    xhat,yhat: coordinate at Ehat
     Note
     2---3
     |   |
     0---1
     Output:
     ------
-    AC reduce basis function on element E in terms of (x,y)
+    AC reduce basis function on element E in terms of (xhat,yhat)
     """
 
     basis = []
@@ -166,11 +166,11 @@ def ACbasis(coord_E,x,y):
             eqs[k] -= 1
             sol = solve(eqs)
             # Define the inverse Piola to find (xhat,yhat) corresponds to (x,y) in E
-            Xhat = [[x],[y]]
+            Xhat = [[xhat],[yhat]]
             X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
             # this works because now E = Ehat
-            xhat = X[0][0]
-            yhat = X[1][0]
+            x = X[0][0]
+            y = X[1][0]
             V = VACred(coord_E, x, y, xhat, yhat) 
             vx = V[0]
             vy = V[1]
@@ -181,14 +181,3 @@ def ACbasis(coord_E,x,y):
 
     return basis
 
-coord_E = [[-1.,-1.],
-           [1.,-1.],
-           [-1.,1.],
-           [1.,1.]]
-x = 0
-y = 0
-AC = ACbasis(coord_E,x,y)
-print(AC)
-print('===========================')
-BDM = BDMbasis(coord_E,x,y)
-print(BDM)

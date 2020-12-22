@@ -47,7 +47,7 @@ class TestPiolaTransformation(unittest.TestCase):
         self.assertEqual(DF_E[1][1],0.5)
 
 
-class TestBDMbasis(unittest.TestCase):
+class Testbasis(unittest.TestCase):
 
     def test_BDMbasis1(self):
         """ Note 
@@ -63,6 +63,21 @@ class TestBDMbasis(unittest.TestCase):
         self.assertEqual(np.dot([BDM[0],BDM[1]],[-1,0]),1.0)
         self.assertEqual(np.dot([BDM[2],BDM[3]],[0,-1]),1.0)
         self.assertEqual(np.dot([BDM[4],BDM[5]],[1,0]),0.0)
+
+    def test_ACbasis1(self):
+        """ Note 
+        2---3
+        |   |
+        0---1
+        """
+        coord_E = [[0.,0.],
+                   [1.,0.],
+                   [0.,1.],
+                   [1.,1.]]
+        AC = FE.ACbasis(coord_E,-1,-1)
+        self.assertEqual(np.dot([AC[0],AC[1]],[-1,0]),1.0)
+        self.assertEqual(np.dot([AC[2],AC[3]],[0,-1]),1.0)
+        self.assertEqual(np.dot([AC[4],AC[5]],[1,0]),0.0)
 
 
 def main():
