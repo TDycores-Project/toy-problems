@@ -184,6 +184,17 @@ def ACprimebasis(coord_E,xhat,yhat):
 
 
 def GetQuadrature(Q, quadmethod):
+    """This function returns quadrature points (q) and its weight (w).
+    Input:
+    ------
+    Q: number of quadrature points you want
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    w, q: quadrature weights and quadrature points
+    """
 
     if quadmethod=='GAUSS':
         beta = []
@@ -193,7 +204,7 @@ def GetQuadrature(Q, quadmethod):
             beta.append(beta1)
 
         D, V = np.linalg.eig(np.diag(beta, k=1) + np.diag(beta, k=-1))
-
+        # we need to sort the eigenvalues, is not sorted
         idx = np.argsort(D)
         V = V[:,idx]
         w = []
@@ -233,6 +244,8 @@ def GetQuadrature(Q, quadmethod):
         sys.exit(1)
     
     return w, q
+
+
 
 
 
