@@ -64,16 +64,16 @@ def VBDM(x, y):
     V = [vx, vy]
     return V
 
-def BDMbasis(coord_E,x,y):
+def BDMprimebasis(coord_E,x,y):
     """
     Input:
     ------
     coord_E: is the coordinate of vertices of ref element.
-    for BDM ref element is defined on [-1,-1]^2
-    x,y: basis is evaluated at (x,y)
+    for BDM ref element is defined on [-1,1]^2
+    x,y: basis is evaluated at (x,y) in [-1,1]^2
     If you wanna check the basis expression, run
     x, y = symbols('x y')           
-    BDM = BDMbasis(coord_E,x,y)  
+    BDM = BDMprimebasis(coord_E,x,y)  
     Note that vertices here are
     2---3
     |   |
@@ -81,7 +81,7 @@ def BDMbasis(coord_E,x,y):
     like PETSc
     Output:
     ------
-    BDM basis function on ref element [-1,-1]^2 in terms of (x,y)
+    BDM prime basis function on ref element [-1,-1]^2 in terms of (x,y)
     """
     basis = []
     for i in range(4):
@@ -119,6 +119,7 @@ def VACred(coord_E, x, y, xhat, yhat):
     sghat1 = [[1-xhat**2],[2*xhat*yhat]] 
     # for debugging define the supplement as BDM
     # sghat1 = [[xhat**2],[-2*xhat*yhat]] 
+
     # sigma_hat_2 = curl((1-yhat^2)*xhat)
     sghat2 = [[-2*xhat*yhat],[yhat**2-1]] 
     # for debugging define the supplement as BDM
@@ -136,7 +137,7 @@ def VACred(coord_E, x, y, xhat, yhat):
     V = [vx, vy]
     return V
 
-def ACbasis(coord_E,xhat,yhat):
+def ACprimebasis(coord_E,xhat,yhat):
     """
     Input:
     ------
@@ -148,7 +149,7 @@ def ACbasis(coord_E,xhat,yhat):
     0---1
     Output:
     ------
-    AC reduce basis function on element E in terms of (xhat,yhat)
+    ACreduce prime basis function on element E in terms of (xhat,yhat)
     """
 
     basis = []
@@ -180,4 +181,58 @@ def ACbasis(coord_E,xhat,yhat):
             basis.append(uy)
 
     return basis
+
+
+def GetQuadrature(Q, quadmethod):
+
+    if quadmethod=='GAUSS':
+        beta = []
+        alpha = range(1, Q)
+        for i in range(0,Q-1):
+            beta1 = 0.5/math.sqrt(1-(2*alpha[i])**(-2))
+            beta.append(beta1)
+
+        D, V = np.linalg.eig(np.diag(beta, k=1) + np.diag(beta, k=-1))
+
+        idx = np.argsort(D)
+        V = V[:,idx]
+        w = []
+        q = []
+        for i in range(0,Q):
+            w.append(2*V[0][i]**2)
+            q.append(D[idx[i]])
+
+    elif quadmethod=='LGL':
+        x = []
+        alpha = range(0, Q)
+        for i in range(0,Q):
+            x.append(-math.cos(math.pi*alpha[i]/(Q-1)))
+
+        x = np.array(x)
+        P = np.zeros((Q,Q))
+        xold = 2*np.ones(Q)
+        error = np.absolute(x-xold)
+        iteration = 0
+        for i in range(0,Q):
+            while (error[i] > 1e-16):
+                xold = x
+                
+                P[:,0] = 1
+                P[:,1] = x
+                for k in range(1,Q-1):
+                    P[:,k+1] = np.divide(((2*k+1)*(x*P[:,k]) - (k)*P[:,k-1]),k+1)
+
+                x = xold - np.divide(x*P[:,Q-1]-P[:,Q-2],Q*P[:,Q-1])
+                error = np.absolute(x-xold)
+                iteration+=1
+
+        w=np.divide(2,(Q-1)*Q*P[:,Q-1]**2)
+        q=x
+    else:
+        print("Error: quadmethod is wrong!Please enter 'GAUSS' or 'LGL'!")
+        sys.exit(1)
+    
+    return w, q
+
+
 
