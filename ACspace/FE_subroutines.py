@@ -52,6 +52,44 @@ def PiolaTransform(coord_E, Xhat):
 
     return X, DF_E, J_E
 
+def GetNormal(coord_E, xhat, yhat):
+
+    Xhat = [[xhat],[yhat]]
+    X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
+    
+    dxdxhat = DF_E[0][0]
+    dydxhat = DF_E[1][0]
+    length1 = math.sqrt(dxdxhat*dxdxhat + dydxhat*dydxhat)
+
+    dxdyhat = DF_E[0][1]
+    dydyhat = DF_E[1][1]
+    length2 = math.sqrt(dxdyhat*dxdyhat + dydyhat*dydyhat)
+
+    if (xhat == -1. and -1.<yhat<1.):
+        # left edge, (0,0,1)x(dxdyhat,dydyhat,0)
+        n = np.array([-dydyhat, dxdyhat])
+        n = [x/length2 for x in n]
+
+    elif (xhat == 1. and -1.<yhat<1.):
+        # right edge, (0,0,-1)x(dxdyhat,dydyhat,0)
+        n = np.array([dydyhat, -dxdyhat])
+        n = [x/length2 for x in n]
+
+    elif (yhat == -1. and -1.<xhat<1.):
+        # bottom edge, (0,0,-1)x(dxdxhat,dydxhat,0)
+        n = np.array([dydxhat, -dxdxhat])
+        n = [x/length1 for x in n]
+
+    elif (yhat == 1. and -1.<xhat<1.):
+        # top edge, (0,0,1)x(dxdxhat,dydxhat,0)
+        n = np.array([-dydxhat, dxdxhat])
+        n = [x/length1 for x in n]
+
+    else:
+        print("Error! Enter the (xhat, yhat) on the edge of Ehat")
+
+    return n, X
+
 # the following two function is for verifying the BDM space
 # written by Nate in HdivSetup/basis.py
 def VBDM(x, y):
@@ -245,7 +283,7 @@ def GetQuadrature(Q, quadmethod):
     
     return w, q
 
-
-
-
-
+coord_E = [[0.,0.],
+           [1.,0.],
+           [0.25,0.5],
+           [0.75,0.75]]
