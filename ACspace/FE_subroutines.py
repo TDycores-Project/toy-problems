@@ -53,6 +53,20 @@ def PiolaTransform(coord_E, Xhat):
     return X, DF_E, J_E
 
 def GetNormal(coord_E, xhat, yhat):
+    """This function returns the normal n and coordinate (x,y) on edge in element E.
+    Input:
+    ------
+    coord_E: vertices coordinate of element E
+    (xhat,yhat): coordinate of the edge in element Ehat=[-1,1]^2
+
+    Output:
+    -------
+    n: computed normal of an edge of element E
+    (x,y): mapped point of (xhat, yhat)
+
+    for example if you want normal on the left edge of E
+    enter coord_E, and (-1,0) to get 'n' of the left edge of E and corresponding (x,y)
+    """
 
     Xhat = [[xhat],[yhat]]
     X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
@@ -121,18 +135,22 @@ def BDMprimebasis(coord_E,x,y):
     ------
     BDM prime basis function on ref element [-1,-1]^2 in terms of (x,y)
     """
+    nl, X = GetNormal(coord_E, -1., 0.)
+    nr, X = GetNormal(coord_E, 1., 0.)
+    nb, X = GetNormal(coord_E, 0., -1.)
+    nt, X = GetNormal(coord_E, 0., 1.)
     basis = []
     for i in range(4):
         for j in range(2):
             k = 2*i+j
-            eqs = [ np.dot(VBDM(coord_E[0][0], coord_E[0][1]),[-1, 0]),
-                    np.dot(VBDM(coord_E[0][0], coord_E[0][1]),[ 0,-1]),
-                    np.dot(VBDM(coord_E[1][0], coord_E[1][1]),[ 1, 0]),
-                    np.dot(VBDM(coord_E[1][0], coord_E[1][1]),[ 0,-1]),
-                    np.dot(VBDM(coord_E[2][0], coord_E[2][1]),[-1, 0]),
-                    np.dot(VBDM(coord_E[2][0], coord_E[2][1]),[ 0, 1]),
-                    np.dot(VBDM(coord_E[3][0], coord_E[3][1]),[ 1, 0]),
-                    np.dot(VBDM(coord_E[3][0], coord_E[3][1]),[ 0, 1])]
+            eqs = [ np.dot(VBDM(coord_E[0][0], coord_E[0][1]),nl),
+                    np.dot(VBDM(coord_E[0][0], coord_E[0][1]),nb),
+                    np.dot(VBDM(coord_E[1][0], coord_E[1][1]),nr),
+                    np.dot(VBDM(coord_E[1][0], coord_E[1][1]),nb),
+                    np.dot(VBDM(coord_E[2][0], coord_E[2][1]),nl),
+                    np.dot(VBDM(coord_E[2][0], coord_E[2][1]),nt),
+                    np.dot(VBDM(coord_E[3][0], coord_E[3][1]),nr),
+                    np.dot(VBDM(coord_E[3][0], coord_E[3][1]),nt)]
             eqs[k] -= 1
             sol = solve(eqs)
             V = VBDM(x,y) 
@@ -189,19 +207,22 @@ def ACprimebasis(coord_E,xhat,yhat):
     ------
     ACreduce prime basis function on element E in terms of (xhat,yhat)
     """
-
+    nl, X = GetNormal(coord_E, -1., 0.)
+    nr, X = GetNormal(coord_E, 1., 0.)
+    nb, X = GetNormal(coord_E, 0., -1.)
+    nt, X = GetNormal(coord_E, 0., 1.)
     basis = []
     for i in range(4):
         for j in range(2):
             k = 2*i+j
-            eqs = [ np.dot(VACred(coord_E,coord_E[0][0], coord_E[0][1],-1,-1),[-1, 0]),
-                    np.dot(VACred(coord_E,coord_E[0][0], coord_E[0][1],-1,-1),[ 0,-1]),
-                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1], 1,-1),[ 1, 0]),
-                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1], 1,-1),[ 0,-1]),
-                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],-1, 1),[-1, 0]),
-                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],-1, 1),[ 0, 1]),
-                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1], 1, 1),[ 1, 0]),
-                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1], 1, 1),[ 0, 1])]
+            eqs = [ np.dot(VACred(coord_E,coord_E[0][0], coord_E[0][1],-1,-1),nl),
+                    np.dot(VACred(coord_E,coord_E[0][0], coord_E[0][1],-1,-1),nb),
+                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1], 1,-1),nr),
+                    np.dot(VACred(coord_E,coord_E[1][0], coord_E[1][1], 1,-1),nb),
+                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],-1, 1),nl),
+                    np.dot(VACred(coord_E,coord_E[2][0], coord_E[2][1],-1, 1),nt),
+                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1], 1, 1),nr),
+                    np.dot(VACred(coord_E,coord_E[3][0], coord_E[3][1], 1, 1),nt)]
             eqs[k] -= 1
             sol = solve(eqs)
             # Using Piola we find (x,y) in E based on input (xhat, yhat)
@@ -282,8 +303,3 @@ def GetQuadrature(Q, quadmethod):
         sys.exit(1)
     
     return w, q
-
-coord_E = [[0.,0.],
-           [1.,0.],
-           [0.25,0.5],
-           [0.75,0.75]]
