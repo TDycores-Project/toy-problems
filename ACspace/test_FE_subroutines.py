@@ -141,6 +141,7 @@ class TestQuadrature(unittest.TestCase):
 class TestNormal(unittest.TestCase):
 
     def test_Normal1(self):
+        # test on E = [0,0.5]^2
         coord_E = [[0.0,0.0],
                    [0.5,0.0],
                    [0.0,0.5],
@@ -172,7 +173,7 @@ class TestNormal(unittest.TestCase):
 
 
 class TestNormal2(unittest.TestCase):
-
+    # test based on Fig 3.5 of Zhen Tao PhD thesis
     def test_Normal2(self):
         coord_E = [[0.,0.],
                    [1.,0.],
