@@ -1,6 +1,7 @@
 import unittest
 import FE_subroutines as FE
 import numpy as np
+import math
 
 class TestPiolaTransformation(unittest.TestCase):
 
@@ -135,6 +136,72 @@ class TestQuadrature(unittest.TestCase):
             for i in range(0,5):
                 self.assertAlmostEqual(ww5[i], w[i],None,None,delta)
                 self.assertAlmostEqual(qq5[i], q[i],None,None,delta)
+
+
+class TestNormal(unittest.TestCase):
+
+    def test_Normal1(self):
+        coord_E = [[0.0,0.0],
+                   [0.5,0.0],
+                   [0.0,0.5],
+                   [0.5,0.5]]
+        # check the left edge and (x,y) mapped from (xhat,yhat)
+        nl = [-1.,0.]
+        n, X = FE.GetNormal(coord_E,-1. ,0.)
+        self.assertAlmostEqual(n[0],nl[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nl[1],None,None,1e-8)
+        self.assertAlmostEqual(X[1][0],0.25,None,None,1e-8)
+        # check the right edge and (x,y) mapped from (xhat,yhat)
+        nr = [1.,0]
+        n, X = FE.GetNormal(coord_E,1. ,0.)
+        self.assertAlmostEqual(n[0],nr[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nr[1],None,None,1e-8)
+        self.assertAlmostEqual(X[0][0],0.5,None,None,1e-8)
+        # check the bottom edge and (x,y) mapped from (xhat,yhat)
+        nb = [0.,-1.]
+        n, X = FE.GetNormal(coord_E,0 ,-1)
+        self.assertAlmostEqual(n[0],nb[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nb[1],None,None,1e-8)
+        self.assertAlmostEqual(X[0][0],0.25,None,None,1e-8)
+        # check the top edge and (x,y) mapped from (xhat,yhat)
+        nt = [0.,1.]
+        n, X = FE.GetNormal(coord_E,0 ,1)
+        self.assertAlmostEqual(n[0],nt[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nt[1],None,None,1e-8)
+        self.assertAlmostEqual(X[1][0],0.5,None,None,1e-8)
+
+
+class TestNormal2(unittest.TestCase):
+
+    def test_Normal2(self):
+        coord_E = [[0.,0.],
+                   [1.,0.],
+                   [0.25,0.5],
+                   [0.75,0.75]]
+        # check the left edge and (x,y) mapped from (xhat,yhat)
+        nl = np.array([-2/math.sqrt(5), 1/math.sqrt(5)])
+        n, X = FE.GetNormal(coord_E,-1. ,0.)
+        self.assertAlmostEqual(n[0],nl[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nl[1],None,None,1e-8)
+        self.assertAlmostEqual(X[0][0],1/8,None,None,1e-8)
+        # check the right edge and (x,y) mapped from (xhat,yhat)
+        nr = [3/math.sqrt(10),1/math.sqrt(10)]
+        n, X = FE.GetNormal(coord_E,1. ,0.)
+        self.assertAlmostEqual(n[0],nr[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nr[1],None,None,1e-8)
+        self.assertAlmostEqual(X[0][0],7/8,None,None,1e-8)
+        # check the bottom edge and (x,y) mapped from (xhat,yhat)
+        nb = [0.,-1.]
+        n, X = FE.GetNormal(coord_E,0 ,-1)
+        self.assertAlmostEqual(n[0],nb[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nb[1],None,None,1e-8)
+        self.assertAlmostEqual(X[0][0],0.5,None,None,1e-8)
+        # check the top edge and (x,y) mapped from (xhat,yhat)
+        nt = [-1/math.sqrt(5),2/math.sqrt(5)]
+        n, X = FE.GetNormal(coord_E,0. ,1.)
+        self.assertAlmostEqual(n[0],nt[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nt[1],None,None,1e-8)
+        self.assertAlmostEqual(X[1][0],0.625,None,None,1e-8)
 
 
 def main():
