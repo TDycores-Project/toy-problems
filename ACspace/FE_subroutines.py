@@ -116,7 +116,7 @@ def VBDM(x, y):
     V = [vx, vy]
     return V
 
-def BDMprimebasis(coord_E,x,y):
+def BDMbasis(coord_E,x,y):
     """
     Input:
     ------
@@ -125,7 +125,7 @@ def BDMprimebasis(coord_E,x,y):
     x,y: basis is evaluated at (x,y) in [-1,1]^2
     If you wanna check the basis expression, run
     x, y = symbols('x y')           
-    BDM = BDMprimebasis(coord_E,x,y)  
+    BDM = BDMbasis(coord_E,x,y)  
     Note that vertices here are
     2---3
     |   |
@@ -133,7 +133,7 @@ def BDMprimebasis(coord_E,x,y):
     like PETSc
     Output:
     ------
-    BDM prime basis function on ref element [-1,-1]^2 in terms of (x,y)
+    BDM basis function on ref element [-1,-1]^2 in terms of (x,y)
     """
     nl, X = GetNormal(coord_E, -1., 0.)
     nr, X = GetNormal(coord_E, 1., 0.)
@@ -158,7 +158,7 @@ def BDMprimebasis(coord_E,x,y):
             vy = V[1]
             ux = vx.subs(sol)
             uy = vy.subs(sol)
-
+            
             basis.append(ux)
             basis.append(uy)
 
@@ -193,7 +193,7 @@ def VACred(coord_E, x, y, xhat, yhat):
     V = [vx, vy]
     return V
 
-def ACprimebasis(coord_E,xhat,yhat):
+def ACbasis(coord_E,xhat,yhat):
     """
     Input:
     ------
@@ -205,7 +205,7 @@ def ACprimebasis(coord_E,xhat,yhat):
     0---1
     Output:
     ------
-    ACreduce prime basis function on element E in terms of (xhat,yhat)
+    ACreduce basis function on element E in terms of (xhat,yhat)
     """
     nl, X = GetNormal(coord_E, -1., 0.)
     nr, X = GetNormal(coord_E, 1., 0.)
@@ -303,3 +303,4 @@ def GetQuadrature(Q, quadmethod):
         sys.exit(1)
     
     return w, q
+
