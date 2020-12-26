@@ -7,6 +7,7 @@ import numpy as np
 import math
 import sys
 from sympy import *
+import matplotlib.pyplot as plt
 
 def PiolaTransform(coord_E, Xhat):
     """ This function maps Xhat=(xhat,yhat) in Ehat=[-1,1]^2 
@@ -303,4 +304,3 @@ def GetQuadrature(Q, quadmethod):
         sys.exit(1)
     
     return w, q
-
