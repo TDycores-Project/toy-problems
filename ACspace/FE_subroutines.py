@@ -40,15 +40,17 @@ def PiolaTransform(coord_E, Xhat):
                           (1+xhat)*(1-yhat),
                           (1-xhat)*(1+yhat),
                           (1+xhat)*(1+yhat)]])
+    P_E = P @ coord_E
     # x=F_E(xhat)
-    X =np.transpose(np.matmul(P, coord_E))
+    X = P_E.T
     # gradient of P, 1st row = dP/dxhat, 2nd row=dP/dyhat
     GradP = 0.25 * np.array([[-(1-yhat),(1-yhat),-(1+yhat),(1+yhat)],
                              [-(1-xhat),-(1+xhat),(1-xhat),(1+xhat)]])
 
     # DF_E = [[dx/dxhat, dx/dyhat],
     #         [dy/dxhat, dy/dyhat]]
-    DF_E = np.transpose(np.matmul(GradP, coord_E))
+    JT = GradP @ coord_E
+    DF_E = JT.T
     J_E = np.linalg.det(DF_E)
 
     return X, DF_E, J_E
@@ -83,22 +85,23 @@ def GetNormal(coord_E, xhat, yhat):
     if (xhat == -1. and -1.<yhat<1.):
         # left edge, (0,0,1)x(dxdyhat,dydyhat,0)
         n = np.array([-dydyhat, dxdyhat])
-        n = [x/length2 for x in n]
+        n = n/length2
 
     elif (xhat == 1. and -1.<yhat<1.):
         # right edge, (0,0,-1)x(dxdyhat,dydyhat,0)
         n = np.array([dydyhat, -dxdyhat])
-        n = [x/length2 for x in n]
+        n = n/length2
 
     elif (yhat == -1. and -1.<xhat<1.):
         # bottom edge, (0,0,-1)x(dxdxhat,dydxhat,0)
         n = np.array([dydxhat, -dxdxhat])
-        n = [x/length1 for x in n]
+        n = n/length1
 
     elif (yhat == 1. and -1.<xhat<1.):
         # top edge, (0,0,1)x(dxdxhat,dydxhat,0)
         n = np.array([-dydxhat, dxdxhat])
-        n = [x/length1 for x in n]
+        n = n/length1
+        #n = [x/length1 for x in n]
 
     else:
         print("Error! Enter the (xhat, yhat) on the edge of Ehat")
@@ -185,8 +188,8 @@ def VACred(coord_E, x, y, xhat, yhat):
     Xhat = [[xhat],[yhat]]
     X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
     # sigma_i = P_E*sigma_hat_i
-    sg1 = np.matmul(DF_E/J_E,sghat1)
-    sg2 = np.matmul(DF_E/J_E,sghat2)
+    sg1 = (DF_E/J_E) @ sghat1
+    sg2 = (DF_E/J_E) @ sghat2
 
     a1,a2,b1,b2,g1,g2,r,s = symbols('a1 a2 b1 b2 g1 g2 r s')
     vx  = a1*x + b1*y + g1 + r*sg1[0][0] + s*sg2[0][0]
