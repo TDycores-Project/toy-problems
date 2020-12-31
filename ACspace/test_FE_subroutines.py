@@ -15,8 +15,7 @@ class TestPiolaTransformation(unittest.TestCase):
                    [1.,0.],
                    [0.,1.],
                    [1.,1.]]
-        Xhat = [[-1],
-                [-1]]
+        Xhat = [-1,-1]
         X, DF_E, J_E = FE.PiolaTransform(coord_E, Xhat)
 
         self.assertEqual(X[0][0], coord_E[0][0])
@@ -36,8 +35,7 @@ class TestPiolaTransformation(unittest.TestCase):
                    [1.,0.],
                    [0.,1.],
                    [1.,1.]]
-        Xhat = [[0.],
-                [0.]]
+        Xhat = [0., 0.]
         X, DF_E, J_E = FE.PiolaTransform(coord_E, Xhat)
 
         self.assertEqual(X[0][0], 0.5)
@@ -58,25 +56,25 @@ class TestNormal(unittest.TestCase):
                    [0.5,0.5]]
         # check the left edge and (x,y) mapped from (xhat,yhat)
         nl = [-1.,0.]
-        n, X = FE.GetNormal(coord_E,-1. ,0.)
+        n, X = FE.GetNormal(coord_E,[-1. ,0.])
         self.assertAlmostEqual(n[0],nl[0],None,None,1e-8)
         self.assertAlmostEqual(n[1],nl[1],None,None,1e-8)
         self.assertAlmostEqual(X[1][0],0.25,None,None,1e-8)
         # check the right edge and (x,y) mapped from (xhat,yhat)
         nr = [1.,0]
-        n, X = FE.GetNormal(coord_E,1. ,0.)
+        n, X = FE.GetNormal(coord_E,[1. ,0.])
         self.assertAlmostEqual(n[0],nr[0],None,None,1e-8)
         self.assertAlmostEqual(n[1],nr[1],None,None,1e-8)
         self.assertAlmostEqual(X[0][0],0.5,None,None,1e-8)
         # check the bottom edge and (x,y) mapped from (xhat,yhat)
         nb = [0.,-1.]
-        n, X = FE.GetNormal(coord_E,0 ,-1)
+        n, X = FE.GetNormal(coord_E,[0 ,-1])
         self.assertAlmostEqual(n[0],nb[0],None,None,1e-8)
         self.assertAlmostEqual(n[1],nb[1],None,None,1e-8)
         self.assertAlmostEqual(X[0][0],0.25,None,None,1e-8)
         # check the top edge and (x,y) mapped from (xhat,yhat)
         nt = [0.,1.]
-        n, X = FE.GetNormal(coord_E,0 ,1)
+        n, X = FE.GetNormal(coord_E,[0 ,1])
         self.assertAlmostEqual(n[0],nt[0],None,None,1e-8)
         self.assertAlmostEqual(n[1],nt[1],None,None,1e-8)
         self.assertAlmostEqual(X[1][0],0.5,None,None,1e-8)
@@ -92,7 +90,7 @@ class TestNormal2(unittest.TestCase):
         # check the left edge normal and middle point (x,y) mapped from (xhat,yhat)
         nl = np.array([-2/math.sqrt(5), 1/math.sqrt(5)])
         # enter the middle point (-1,,0) on the left edge of Ehat
-        n, X = FE.GetNormal(coord_E,-1. ,0.)
+        n, X = FE.GetNormal(coord_E,[-1. ,0.])
         self.assertAlmostEqual(n[0],nl[0],None,None,1e-8)
         self.assertAlmostEqual(n[1],nl[1],None,None,1e-8)
         self.assertAlmostEqual(X[0][0],1/8,None,None,1e-8)
@@ -100,7 +98,7 @@ class TestNormal2(unittest.TestCase):
         # check the right edge normal and middle point (x,y) mapped from (xhat,yhat)
         nr = [3/math.sqrt(10),1/math.sqrt(10)]
         # enter the middle point (1,0) on the right edge of Ehat
-        n, X = FE.GetNormal(coord_E,1. ,0.)
+        n, X = FE.GetNormal(coord_E,[1. ,0.])
         self.assertAlmostEqual(n[0],nr[0],None,None,1e-8)
         self.assertAlmostEqual(n[1],nr[1],None,None,1e-8)
         self.assertAlmostEqual(X[0][0],7/8,None,None,1e-8)
@@ -108,7 +106,7 @@ class TestNormal2(unittest.TestCase):
         # check the bottom edge normal and middle point (x,y) mapped from (xhat,yhat)
         nb = [0.,-1.]
         # enter the middle point (0,-1) on the bottom edge of Ehat
-        n, X = FE.GetNormal(coord_E,0 ,-1)
+        n, X = FE.GetNormal(coord_E,[0 ,-1])
         self.assertAlmostEqual(n[0],nb[0],None,None,1e-8)
         self.assertAlmostEqual(n[1],nb[1],None,None,1e-8)
         self.assertAlmostEqual(X[0][0],0.5,None,None,1e-8)
@@ -116,7 +114,7 @@ class TestNormal2(unittest.TestCase):
         # check the top edge normal and middle point (x,y) mapped from (xhat,yhat)
         nt = [-1/math.sqrt(5),2/math.sqrt(5)]
         # enter the middle point (0,1) on the top edge of Ehat
-        n, X = FE.GetNormal(coord_E,0. ,1.)
+        n, X = FE.GetNormal(coord_E,[0. ,1.])
         self.assertAlmostEqual(n[0],nt[0],None,None,1e-8)
         self.assertAlmostEqual(n[1],nt[1],None,None,1e-8)
         self.assertAlmostEqual(X[1][0],0.625,None,None,1e-8)
@@ -134,7 +132,7 @@ class Testbasis(unittest.TestCase):
                    [1.,-1.],
                    [-1.,1.],
                    [1.,1.]]
-        BDM = FE.BDMbasis(coord_E,-1,-1)
+        BDM = FE.BDMbasis(coord_E,[-1,-1])
         self.assertEqual(np.dot([BDM[0],BDM[1]],[-1,0]),1.0)
         self.assertEqual(np.dot([BDM[2],BDM[3]],[0,-1]),1.0)
         self.assertEqual(np.dot([BDM[4],BDM[5]],[1,0]),0.0)
@@ -149,7 +147,7 @@ class Testbasis(unittest.TestCase):
                    [1.,0.],
                    [0.,1.],
                    [1.,1.]]
-        AC = FE.ACbasis(coord_E,-1,-1)
+        AC, div, N = FE.ACbasis(coord_E,[-1,-1])
         self.assertEqual(np.dot([AC[0],AC[1]],[-1,0]),1.0)
         self.assertEqual(np.dot([AC[2],AC[3]],[0,-1]),1.0)
         self.assertEqual(np.dot([AC[4],AC[5]],[1,0]),0.0)
@@ -172,34 +170,42 @@ class Testbasis(unittest.TestCase):
         nt = [-1/math.sqrt(5),2/math.sqrt(5)]
         nb = [0.,-1.]
         # check node 0,
-        AC = FE.ACbasis(coord_E,-1,-1)
+        AC, div, N = FE.ACbasis(coord_E,[-1,-1])
         # check v11.nl=1 and v12.nb=1
         self.assertAlmostEqual(np.dot([AC[0],AC[1]],nl),1.0,None,None,1e-10)
+        print("v11=",[AC[0],AC[1]])
         self.assertAlmostEqual(np.dot([AC[2],AC[3]],nb),1.0,None,None,1e-10)
+        print("v12=",[AC[2],AC[3]])
         # check v21.nr = 0
         self.assertAlmostEqual(np.dot([AC[4],AC[5]],nr),0.0, None, None,1e-10)
 
         # check node 1,
-        AC = FE.ACbasis(coord_E,1,-1)
+        AC, div, N = FE.ACbasis(coord_E,[1,-1])
         # check v21.nr=1 and v22.nb=1 
         self.assertAlmostEqual(np.dot([AC[4],AC[5]],nr),1.0,None,None,1e-10)
+        print("v21=",[AC[4],AC[5]])
         self.assertAlmostEqual(np.dot([AC[6],AC[7]],nb),1.0,None,None,1e-10)
+        print("v22=",[AC[6],AC[7]])
         # check v11.nl = 0
         self.assertAlmostEqual(np.dot([AC[0],AC[1]],nl),0.0, None, None,1e-10)
 
         # check node 2,
-        AC = FE.ACbasis(coord_E,-1,1)
+        AC, div, N = FE.ACbasis(coord_E,[-1,1])
         # check v31.nl=1 and v32.nt=1 
         self.assertAlmostEqual(np.dot([AC[8],AC[9]],nl),1.0,None,None,1e-10)
+        print("v31=",[AC[8],AC[9]])
         self.assertAlmostEqual(np.dot([AC[10],AC[11]],nt),1.0,None,None,1e-10)
+        print("v32=",[AC[10],AC[11]])
         # check v41.nr = 0
         self.assertAlmostEqual(np.dot([AC[12],AC[13]],nr),0.0, None, None,1e-10)
 
         # check node 3,
-        AC = FE.ACbasis(coord_E,1,1)
+        AC, div, N = FE.ACbasis(coord_E,[1,1])
         # check v41.nr=1 and v42.nt=1 
         self.assertAlmostEqual(np.dot([AC[12],AC[13]],nr),1.0,None,None,1e-10)
+        print("v41=",[AC[12],AC[13]])
         self.assertAlmostEqual(np.dot([AC[14],AC[15]],nt),1.0,None,None,1e-10)
+        print("v42=",[AC[14],AC[15]])
         # check v31.nl = 0
         self.assertAlmostEqual(np.dot([AC[8],AC[9]],nl),0.0, None, None,1e-10)
 
