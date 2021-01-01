@@ -286,6 +286,25 @@ class TestConnectivity(unittest.TestCase):
                 self.assertEqual(IEN2[i][j], IEN[i][j])
 
 
+class TestGetNodeCoord(unittest.TestCase):
+
+    def testGetNodeCoord(self):
+        xx = np.array([[0], [1], [0], [1]])
+        yy = np.array([[0], [0], [1], [1]])
+        x, y = FE.GetNodeCoord(1, 1)
+        # the output is x (4x1 array) and y (4x1 array)
+        for i in range(4):
+            self.assertEqual(x[i][0], xx[i][0])
+            self.assertEqual(y[i][0], yy[i][0])
+
+    def testGetNodeCoord2(self):
+        xx = np.array([[0], [0.5], [1], [0], [0.5], [1]])
+        yy = np.array([[0], [0], [0], [1], [1], [1]])
+        x, y = FE.GetNodeCoord(2, 1)
+        # the output is x (4x1 array) and y (4x1 array)
+        for i in range(6):
+            self.assertEqual(x[i][0], xx[i][0])
+            self.assertEqual(y[i][0], yy[i][0])
 
 def main():
     unittest.main()
