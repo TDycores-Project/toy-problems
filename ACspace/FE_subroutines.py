@@ -332,32 +332,58 @@ def GetElementMat(coord_E, Q, quadmethod):
     Me = In.T*W*In, where In is (2Q,8) shape matrix, Q is the number of quadrature
     Be
     """
+    
     w, q = GetQuadrature(Q,quadmethod)
     K = Perm()
     Kinv = np.linalg.inv(K)
     In = np.zeros((0,8))
     Dn = np.zeros((0,8))
     W = np.zeros((2*Q*Q,2*Q*Q))
-    nn = 2*Q
     Np = np.array([[1]])
     NNp = np.zeros((0,1))
+    F = np.zeros((0,1))
+    W2 = np.zeros((Q*Q,Q*Q))
     for i in range(0,Q):
         for j in range(0,Q):
             xhat = q[j]
             yhat = q[i]
             ww = w[i]*w[j]
-            Kinv = ww*Kinv
+            X, DF_E, J_E = PiolaTransform(coord_E, [xhat,yhat])
+            x = X[0][0]
+            y = X[1][0]
+            f = np.array([[2*(math.pi)**2*math.sin(math.pi*x)*math.sin(math.pi*y)]])
             AC, div, N = ACbasis(coord_E,[xhat,yhat])
             In = np.append(In,N, axis=0)
+            W[2*j+2*Q*i][2*j+2*Q*i]=Kinv[0][0]*ww*J_E
+            W[2*j+2*Q*i][2*j+1+2*Q*i]=Kinv[0][1]*ww*J_E
+            W[2*j+1+2*Q*i][2*j+2*Q*i]=Kinv[1][0]*ww*J_E
+            W[2*j+1+2*Q*i][2*j+1+2*Q*i]=Kinv[1][1]*ww*J_E
+            W2[j+Q*i][j+Q*i] = ww
             Dn = np.append(Dn,div,axis=0)
             NNp = np.append(NNp,Np,axis=0)
-            W[2*j+nn*i][2*j+nn*i]=Kinv[0][0]
-            W[2*j+nn*i][2*j+1+nn*i]=Kinv[0][1]
-            W[2*j+1+nn*i][2*j+nn*i]=Kinv[1][0]
-            W[2*j+1+nn*i][2*j+1+nn*i]=Kinv[1][1]
+            F = np.append(F,J_E*f,axis=0)
 
     Me = In.T @ W @ In
-    Be = NNp.T @ Dn
+    Be = NNp.T @ W2 @ Dn
+    Fe = NNp.T @ W2 @ F
 
-    Ae = np.block([[Me, Be.T],[Be, 0*Np]])
-    return Me, Be, Ae
+    Ke = np.block([[Me, Be.T],[Be, 0*Np]])
+    return Fe, Me, Be, Ke
+
+def GetConnectivity(nelx, nely):
+
+    numelem = nelx*nely
+    nodex = nelx + 1
+    nodey = nely + 1
+    IEN = np.zeros((4,numelem), dtype=int)
+
+    for j in range(0,nely):
+        for i in range(0,nelx):
+            ele = (j)*nelx + i
+            
+            IEN[0][ele] = i + j*nodex
+            IEN[1][ele] = i + j*nodex + 1
+            IEN[2][ele] = i + j*nodex + nodex
+            IEN[3][ele] = i + j*nodex + nodex + 1
+
+    return IEN
