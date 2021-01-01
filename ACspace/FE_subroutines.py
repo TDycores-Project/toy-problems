@@ -419,22 +419,56 @@ def GetNodeCoord(nelx, nely):
     """
     nodex = nelx + 1
     nodey = nely + 1
-    TotNodes = nodex*nodey
+    numnodes = nodex*nodey
     
     # Divide [0,1] by nodex (mesh in the x direction)
     x0 = np.linspace(0, 1, nodex)
     y0 = 0.0 * x0**2               # the bottom geometry line
 
-    y = np.zeros((TotNodes, 1))
+    y = np.zeros((numnodes, 1))
     for i in range(0, nodex):
         # Divide [0,1] by nodey (mesh in the y direction)
         y1 = np.linspace(y0[i], 1, nodey)
         for j in range(0, nodey):
             y[i + j*nodex] = y1[j]   # collection of y
 
-    x = np.zeros((TotNodes, 1))
+    x = np.zeros((numnodes, 1))
     for i in range(0, nodey):
         for j in range(0, nodex):
             x[j + i*nodex] = x0[j]   # collection of x
 
     return x, y
+
+def GetID_LM(nelx, nely):
+
+    nodex = nelx + 1
+    nodey = nely + 1
+    numnodes = nodex*nodey
+    numelem = nelx*nely
+    ndof_u = 8
+    ID = np.zeros((2,numnodes), dtype=int)
+    for i in range(0,numnodes):
+        for j in range(0,2):
+            ID[j][i] = 2*i + j
+    IEN = GetConnectivity(nelx, nely)
+    LMu = np.zeros((ndof_u,numelem), dtype=int)
+    for i in range(0,numelem):
+        for j in range(0,4):
+            idd1 = ID[0][IEN[j][i]]
+            idd2 = ID[1][IEN[j][i]]
+            LMu[2*j][i] = idd1
+            LMu[2*j+1][i] = idd2
+
+    # add pressure dof to LM
+    ndof_p = 1
+    maxLMu = np.amax(LMu)
+    LMp = np.zeros((ndof_p,numelem), dtype=int)
+    for i in range(0,numelem):
+        LMp[0][i] = maxLMu + i + 1
+
+    LM = np.block([[LMu],[LMp]])
+
+
+    return ID, LMu, LMp, LM
+
+
