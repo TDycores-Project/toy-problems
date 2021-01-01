@@ -173,9 +173,9 @@ class Testbasis(unittest.TestCase):
         AC, div, N = FE.ACbasis(coord_E,[-1,-1])
         # check v11.nl=1 and v12.nb=1
         self.assertAlmostEqual(np.dot([AC[0],AC[1]],nl),1.0,None,None,1e-10)
-        print("v11=",[AC[0],AC[1]])
+        #print("v11=",[AC[0],AC[1]])
         self.assertAlmostEqual(np.dot([AC[2],AC[3]],nb),1.0,None,None,1e-10)
-        print("v12=",[AC[2],AC[3]])
+        #print("v12=",[AC[2],AC[3]])
         # check v21.nr = 0
         self.assertAlmostEqual(np.dot([AC[4],AC[5]],nr),0.0, None, None,1e-10)
 
@@ -183,9 +183,9 @@ class Testbasis(unittest.TestCase):
         AC, div, N = FE.ACbasis(coord_E,[1,-1])
         # check v21.nr=1 and v22.nb=1 
         self.assertAlmostEqual(np.dot([AC[4],AC[5]],nr),1.0,None,None,1e-10)
-        print("v21=",[AC[4],AC[5]])
+        #print("v21=",[AC[4],AC[5]])
         self.assertAlmostEqual(np.dot([AC[6],AC[7]],nb),1.0,None,None,1e-10)
-        print("v22=",[AC[6],AC[7]])
+        #print("v22=",[AC[6],AC[7]])
         # check v11.nl = 0
         self.assertAlmostEqual(np.dot([AC[0],AC[1]],nl),0.0, None, None,1e-10)
 
@@ -193,9 +193,9 @@ class Testbasis(unittest.TestCase):
         AC, div, N = FE.ACbasis(coord_E,[-1,1])
         # check v31.nl=1 and v32.nt=1 
         self.assertAlmostEqual(np.dot([AC[8],AC[9]],nl),1.0,None,None,1e-10)
-        print("v31=",[AC[8],AC[9]])
+        #print("v31=",[AC[8],AC[9]])
         self.assertAlmostEqual(np.dot([AC[10],AC[11]],nt),1.0,None,None,1e-10)
-        print("v32=",[AC[10],AC[11]])
+        #print("v32=",[AC[10],AC[11]])
         # check v41.nr = 0
         self.assertAlmostEqual(np.dot([AC[12],AC[13]],nr),0.0, None, None,1e-10)
 
@@ -203,67 +203,88 @@ class Testbasis(unittest.TestCase):
         AC, div, N = FE.ACbasis(coord_E,[1,1])
         # check v41.nr=1 and v42.nt=1 
         self.assertAlmostEqual(np.dot([AC[12],AC[13]],nr),1.0,None,None,1e-10)
-        print("v41=",[AC[12],AC[13]])
+        #print("v41=",[AC[12],AC[13]])
         self.assertAlmostEqual(np.dot([AC[14],AC[15]],nt),1.0,None,None,1e-10)
-        print("v42=",[AC[14],AC[15]])
+        #print("v42=",[AC[14],AC[15]])
         # check v31.nl = 0
         self.assertAlmostEqual(np.dot([AC[8],AC[9]],nl),0.0, None, None,1e-10)
 
 class TestQuadrature(unittest.TestCase):
 
-        def test_GAUSS1(self):
-            delta = 1e-4
-            ww2 = [1., 1.]
-            qq2 = [-0.5774, 0.5774]
-            w, q = FE.GetQuadrature(2,'GAUSS')
-            for i in range(0,2):
-                self.assertAlmostEqual(ww2[i], w[i],None,None,delta)
-                self.assertAlmostEqual(qq2[i], q[i],None,None,delta)
-        
-        def test_GAUSS2(self):
-            delta = 1e-4
-            ww3 = [0.5556,  0.8889,  0.5556]
-            qq3 = [-0.7746,      0,  0.7746]
-            w, q = FE.GetQuadrature(3,'GAUSS')
-            for i in range(0,3):
-                self.assertAlmostEqual(ww3[i], w[i],None,None,delta)
-                self.assertAlmostEqual(qq3[i], q[i],None,None,delta)
+    def test_GAUSS1(self):
+        delta = 1e-4
+        ww2 = [1., 1.]
+        qq2 = [-0.5774, 0.5774]
+        w, q = FE.GetQuadrature(2,'GAUSS')
+        for i in range(0,2):
+            self.assertAlmostEqual(ww2[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq2[i], q[i],None,None,delta)
+    
+    def test_GAUSS2(self):
+        delta = 1e-4
+        ww3 = [0.5556,  0.8889,  0.5556]
+        qq3 = [-0.7746,      0,  0.7746]
+        w, q = FE.GetQuadrature(3,'GAUSS')
+        for i in range(0,3):
+            self.assertAlmostEqual(ww3[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq3[i], q[i],None,None,delta)
+    def test_GAUSS3(self):
+        delta = 1e-4
+        ww5 = [0.2369,    0.4786,    0.5689,    0.4786,    0.2369]
+        qq5 = [-0.9062,   -0.5385,    0.0000,    0.5385,    0.9062]
+        w, q = FE.GetQuadrature(5,'GAUSS')
+        for i in range(0,5):
+            self.assertAlmostEqual(ww5[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq5[i], q[i],None,None,delta)
+    def test_LGL1(self):
+        delta = 1e-4
+        ww2 = [1., 1.]
+        qq2 = [-1., 1.]
+        w, q = FE.GetQuadrature(2,'LGL')
+        for i in range(0,2):
+            self.assertAlmostEqual(ww2[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq2[i], q[i],None,None,delta)
+    
+    def test_LGL2(self):
+        delta = 1e-4
+        ww3 = [0.3333,    1.3333,    0.3333]
+        qq3 = [-1.,      0,  1.]
+        w, q = FE.GetQuadrature(3,'LGL')
+        for i in range(0,3):
+            self.assertAlmostEqual(ww3[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq3[i], q[i],None,None,delta)
+    def test_LGL3(self):
+        delta = 1e-4
+        ww5 = [0.1000,    0.5444,    0.7111,    0.5444,    0.1000]
+        qq5 = [-1.0000,   -0.6547,         0,    0.6547,    1.0000]
+        w, q = FE.GetQuadrature(5,'LGL')
+        for i in range(0,5):
+            self.assertAlmostEqual(ww5[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq5[i], q[i],None,None,delta)
 
-        def test_GAUSS3(self):
-            delta = 1e-4
-            ww5 = [0.2369,    0.4786,    0.5689,    0.4786,    0.2369]
-            qq5 = [-0.9062,   -0.5385,    0.0000,    0.5385,    0.9062]
-            w, q = FE.GetQuadrature(5,'GAUSS')
-            for i in range(0,5):
-                self.assertAlmostEqual(ww5[i], w[i],None,None,delta)
-                self.assertAlmostEqual(qq5[i], q[i],None,None,delta)
 
-        def test_LGL1(self):
-            delta = 1e-4
-            ww2 = [1., 1.]
-            qq2 = [-1., 1.]
-            w, q = FE.GetQuadrature(2,'LGL')
-            for i in range(0,2):
-                self.assertAlmostEqual(ww2[i], w[i],None,None,delta)
-                self.assertAlmostEqual(qq2[i], q[i],None,None,delta)
-        
-        def test_LGL2(self):
-            delta = 1e-4
-            ww3 = [0.3333,    1.3333,    0.3333]
-            qq3 = [-1.,      0,  1.]
-            w, q = FE.GetQuadrature(3,'LGL')
-            for i in range(0,3):
-                self.assertAlmostEqual(ww3[i], w[i],None,None,delta)
-                self.assertAlmostEqual(qq3[i], q[i],None,None,delta)
+class TestConnectivity(unittest.TestCase):
 
-        def test_LGL3(self):
-            delta = 1e-4
-            ww5 = [0.1000,    0.5444,    0.7111,    0.5444,    0.1000]
-            qq5 = [-1.0000,   -0.6547,         0,    0.6547,    1.0000]
-            w, q = FE.GetQuadrature(5,'LGL')
-            for i in range(0,5):
-                self.assertAlmostEqual(ww5[i], w[i],None,None,delta)
-                self.assertAlmostEqual(qq5[i], q[i],None,None,delta)
+    def test_connectivity(self):
+        IEN1 = np.array([[0, 1, 3, 4],
+                         [1, 2, 4, 5],
+                         [3, 4, 6, 7],
+                         [4, 5, 7, 8]])
+
+        IEN2 = np.array([[ 0,  1,  2,  4,  5,  6],
+                         [ 1,  2,  3,  5,  6,  7],
+                         [ 4,  5,  6,  8,  9, 10],
+                         [ 5,  6,  7,  9, 10, 11]])
+        IEN = FE.GetConnectivity(2,2)
+        for i in range(2):
+            for j in range(2):
+                self.assertEqual(IEN1[i][j], IEN[i][j])
+
+        IEN = FE.GetConnectivity(3,2)
+        for i in range(3):
+            for j in range(2):
+                self.assertEqual(IEN2[i][j], IEN[i][j])
+
 
 
 def main():
