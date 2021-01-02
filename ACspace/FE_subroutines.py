@@ -341,7 +341,7 @@ def GetElementMat(coord_E, Q, quadmethod):
     W = np.zeros((2*Q*Q,2*Q*Q))
     Np = np.array([[1]])
     NNp = np.zeros((0,1))
-    F = np.zeros((0,1))
+    Fp = np.zeros((0,1))
     W2 = np.zeros((Q*Q,Q*Q))
     for i in range(0,Q):
         for j in range(0,Q):
@@ -351,7 +351,7 @@ def GetElementMat(coord_E, Q, quadmethod):
             X, DF_E, J_E = PiolaTransform(coord_E, [xhat,yhat])
             x = X[0][0]
             y = X[1][0]
-            f = np.array([[2*(math.pi)**2*math.sin(math.pi*x)*math.sin(math.pi*y)]])
+            fp = np.array([[2*(math.pi)**2*math.sin(math.pi*x)*math.sin(math.pi*y)]])
             AC, div, N = ACbasis(coord_E,[xhat,yhat])
             In = np.append(In,N, axis=0)
             W[2*j+2*Q*i][2*j+2*Q*i]=Kinv[0][0]*ww*J_E
@@ -361,14 +361,16 @@ def GetElementMat(coord_E, Q, quadmethod):
             W2[j+Q*i][j+Q*i] = ww
             Dn = np.append(Dn,div,axis=0)
             NNp = np.append(NNp,Np,axis=0)
-            F = np.append(F,J_E*f,axis=0)
+            Fp = np.append(Fp,J_E*fp,axis=0)
 
     Me = In.T @ W @ In
     Be = NNp.T @ W2 @ Dn
-    Fe = NNp.T @ W2 @ F
+    Fep = NNp.T @ W2 @ Fp
+    Feu = np.zeros((8,1))
 
     Ke = np.block([[Me, Be.T],[Be, 0*Np]])
-    return Fe, Me, Be, Ke
+    Fe = np.block([[Feu],[Fep]])
+    return Fe, Ke
 
 def GetConnectivity(nelx, nely):
 
@@ -468,7 +470,28 @@ def GetID_LM(nelx, nely):
 
     LM = np.block([[LMu],[LMp]])
 
+    return ID, LM
 
-    return ID, LMu, LMp, LM
 
+def Assembly(coord_E, Q, quadmethod, nelx, nely):
 
+    ID, LM = GetID_LM(nelx, nely)
+    numelem = nelx*nely
+    ndof = np.amax(LM) + 1
+    neldof = 9
+    temp = np.zeros((neldof,1),dtype=int)
+    K = np.zeros((ndof,ndof))
+    F = np.zeros((ndof,1))
+    for e in range(numelem):
+        Fe, Ke = GetElementMat(coord_E, Q, quadmethod)
+        temp[:,0] = LM[:,e]
+        for i in range(neldof):
+            I = temp[i,0]
+            if I>-1:
+                F[I,0] = F[I,0] + Fe[i,0]
+                for j in range(neldof):
+                    J = temp[j,0]
+                    if J>-1:
+                        K[I,J] = K[I,J] + Ke[i,j]
+
+    return F, K
