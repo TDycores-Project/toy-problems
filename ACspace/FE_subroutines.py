@@ -321,57 +321,6 @@ def GetQuadrature(Q, quadmethod):
     
     return w, q
 
-def Perm():
-
-    K = np.array([[1,0],[0,1]])
-    return K
-
-
-def GetElementMat(coord_E, Q, quadmethod):
-    """create
-    Me = In.T*W*In, where In is (2Q,8) shape matrix, Q is the number of quadrature
-    Be
-    """
-    
-    w, q = GetQuadrature(Q,quadmethod)
-    K = Perm()
-    Kinv = np.linalg.inv(K)
-    In = np.zeros((0,8))
-    Dn = np.zeros((0,8))
-    W = np.zeros((2*Q*Q,2*Q*Q))
-    Np = np.array([[1]])
-    NNp = np.zeros((0,1))
-    Fp = np.zeros((0,1))
-    W2 = np.zeros((Q*Q,Q*Q))
-    for i in range(0,Q):
-        for j in range(0,Q):
-            xhat = q[j]
-            yhat = q[i]
-            ww = w[i]*w[j]
-            X, DF_E, J_E = PiolaTransform(coord_E, [xhat,yhat])
-            x = X[0][0]
-            y = X[1][0]
-            fp = np.array([[2*(math.pi)**2*math.sin(math.pi*x)*math.sin(math.pi*y)]])
-            AC, div, N = ACbasis(coord_E,[xhat,yhat])
-            In = np.append(In,N, axis=0)
-            W[2*j+2*Q*i][2*j+2*Q*i]=Kinv[0][0]*ww*J_E
-            W[2*j+2*Q*i][2*j+1+2*Q*i]=Kinv[0][1]*ww*J_E
-            W[2*j+1+2*Q*i][2*j+2*Q*i]=Kinv[1][0]*ww*J_E
-            W[2*j+1+2*Q*i][2*j+1+2*Q*i]=Kinv[1][1]*ww*J_E
-            W2[j+Q*i][j+Q*i] = ww
-            Dn = np.append(Dn,div,axis=0)
-            NNp = np.append(NNp,Np,axis=0)
-            Fp = np.append(Fp,J_E*fp,axis=0)
-
-    Me = In.T @ W @ In
-    Be = NNp.T @ W2 @ Dn
-    Fep = NNp.T @ W2 @ Fp
-    Feu = np.zeros((8,1))
-
-    Ke = np.block([[Me, Be.T],[Be, 0*Np]])
-    Fe = np.block([[Feu],[Fep]])
-    return Fe, Ke
-
 def GetConnectivity(nelx, nely):
 
     numelem = nelx*nely
@@ -389,6 +338,7 @@ def GetConnectivity(nelx, nely):
             IEN[3][ele] = i + j*nodex + nodex + 1
 
     return IEN
+
 
 def GetNodeCoord(nelx, nely):
     """ This function returns the physical coordinates of the nodes.
@@ -441,6 +391,72 @@ def GetNodeCoord(nelx, nely):
 
     return x, y
 
+
+def Perm():
+
+    K = np.array([[1,0],[0,1]])
+    return K
+
+
+def GetElementMat(Q, quadmethod, nelx, nely, e):
+    """create
+    Me = In.T*W*In, where In is (2Q,8) shape matrix, Q is the number of quadrature
+    Be
+    """
+    IEN = GetConnectivity(nelx, nely)
+    x , y = GetNodeCoord(nelx, nely)
+    # get coordinate of the element
+    ce = np.zeros((4,1), dtype=int)
+    for i in range(4):
+        ce[i][0] = IEN[i][e]
+    coord_E = np.array([[x[ce[0,0]][0], y[ce[0,0]][0]],
+                        [x[ce[1,0]][0], y[ce[1,0]][0]],
+                        [x[ce[2,0]][0], y[ce[2,0]][0]],
+                        [x[ce[3,0]][0], y[ce[3,0]][0]]])
+
+    print(coord_E)
+    print(x)
+    print(y)
+    w, q = GetQuadrature(Q,quadmethod)
+    K = Perm()
+    Kinv = np.linalg.inv(K)
+    In = np.zeros((0,8))
+    Dn = np.zeros((0,8))
+    W = np.zeros((2*Q*Q,2*Q*Q))
+    Np = np.array([[1]])
+    NNp = np.zeros((0,1))
+    Fp = np.zeros((0,1))
+    W2 = np.zeros((Q*Q,Q*Q))
+    for i in range(0,Q):
+        for j in range(0,Q):
+            xhat = q[j]
+            yhat = q[i]
+            ww = w[i]*w[j]
+            X, DF_E, J_E = PiolaTransform(coord_E, [xhat,yhat])
+            x = X[0][0]
+            y = X[1][0]
+            fp = np.array([[2*(math.pi)**2*math.sin(math.pi*x)*math.sin(math.pi*y)]])
+            AC, div, N = ACbasis(coord_E,[xhat,yhat])
+            In = np.append(In,N, axis=0)
+            W[2*j+2*Q*i][2*j+2*Q*i]=Kinv[0][0]*ww*J_E
+            W[2*j+2*Q*i][2*j+1+2*Q*i]=Kinv[0][1]*ww*J_E
+            W[2*j+1+2*Q*i][2*j+2*Q*i]=Kinv[1][0]*ww*J_E
+            W[2*j+1+2*Q*i][2*j+1+2*Q*i]=Kinv[1][1]*ww*J_E
+            W2[j+Q*i][j+Q*i] = ww
+            Dn = np.append(Dn,div,axis=0)
+            NNp = np.append(NNp,Np,axis=0)
+            Fp = np.append(Fp,J_E*fp,axis=0)
+
+    Me = In.T @ W @ In
+    Be = NNp.T @ W2 @ Dn
+    Fep = NNp.T @ W2 @ Fp
+    Feu = np.zeros((8,1))
+
+    Ke = np.block([[Me, Be.T],[Be, 0*Np]])
+    Fe = np.block([[Feu],[Fep]])
+    return Fe, Ke
+
+
 def GetID_LM(nelx, nely):
 
     nodex = nelx + 1
@@ -473,7 +489,7 @@ def GetID_LM(nelx, nely):
     return ID, LM
 
 
-def Assembly(coord_E, Q, quadmethod, nelx, nely):
+def Assembly(Q, quadmethod, nelx, nely):
 
     ID, LM = GetID_LM(nelx, nely)
     numelem = nelx*nely
@@ -483,7 +499,7 @@ def Assembly(coord_E, Q, quadmethod, nelx, nely):
     K = np.zeros((ndof,ndof))
     F = np.zeros((ndof,1))
     for e in range(numelem):
-        Fe, Ke = GetElementMat(coord_E, Q, quadmethod)
+        Fe, Ke = GetElementMat(Q, quadmethod, nelx, nely, e)
         temp[:,0] = LM[:,e]
         for i in range(neldof):
             I = temp[i,0]
