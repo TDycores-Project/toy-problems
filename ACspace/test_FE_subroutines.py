@@ -306,6 +306,31 @@ class TestGetNodeCoord(unittest.TestCase):
             self.assertEqual(x[i][0], xx[i][0])
             self.assertEqual(y[i][0], yy[i][0])
 
+
+class TestGetID_LM(unittest.TestCase):
+
+    def testGetNodeCoord(self):
+        ID1 = np.array([[ 0,  2,  4,  6,  8, 10, 12, 14, 16],
+                        [ 1,  3,  5,  7,  9, 11, 13, 15, 17]])
+        LM1 = np.array([[ 0,  2,  6,  8],
+                        [ 1,  3,  7,  9],
+                        [ 2,  4,  8, 10],
+                        [ 3,  5,  9, 11],
+                        [ 6,  8, 12, 14],
+                        [ 7,  9, 13, 15],
+                        [ 8, 10, 14, 16],
+                        [ 9, 11, 15, 17],
+                        [18, 19, 20, 21]]) 
+        ID, LM = FE.GetID_LM(2, 2)
+        for i in range(9):
+            for j in range(4):
+                self.assertEqual(LM[i][j], LM1[i][j])
+
+        for i in range(9):
+            for j in range(2):
+                self.assertEqual(ID[j][i],ID1[j][i])
+
+
 def main():
     unittest.main()
 
