@@ -117,6 +117,7 @@ def VACred(coord_E, Xhat):
     See eq. (3.14), (3.12), (3.15) of AC paper, SIAM J 2016
     Note that (x,y) is defined on E
     and xhat, yhat is defined on Ehat
+    returns 2x8 matrix which is our 8 prime basis phi_j
     """
     xhat = Xhat[0]
     yhat = Xhat[1]
@@ -245,3 +246,35 @@ def GetQuadrature(Q, quadmethod):
         sys.exit(1)
     
     return w, q
+
+def GetInterpolateMat(coord_E,Q,quadmethod):
+    """This function returns the interpolation matrix at quadrature points
+    N_qi = Nhat_qj*(inv(VM))_ji, where Nhat_qj = phi_j(x_q), phi_j is
+    prime basis
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    N: the nodal interpolation matrix computed at quadrature points
+    shape (2*Q*Q,8), again Q is quadrature points in 1D
+    """
+
+    w, q = GetQuadrature(Q, quadmethod)
+    VM = VondermondeMat(coord_E)
+    Nhat = np.zeros((0,8))
+    for i in range(Q):
+            for j in range(Q):
+                xhat = q[j]
+                yhat = q[i]
+                V = VACred(coord_E, [xhat,yhat])
+                Nhat = np.append(Nhat,V, axis=0)
+
+    invVM = np.linalg.inv(VM)
+    N = Nhat @ invVM.T
+
+    return N
