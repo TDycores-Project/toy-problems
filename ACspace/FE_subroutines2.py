@@ -188,13 +188,13 @@ def GetQuadrature(Q, quadmethod):
     This function returns quadrature points (q) and its weight (w).
     Input:
     ------
-    Q: number of quadrature points you want
+    Q: number of quadrature points you want in 1D
     quadmethod: The method for computing q and w
     either 'GAUSS' or 'LGL'
 
     Output:
     -------
-    w, q: quadrature weights and quadrature points
+    w, q: quadrature weights and quadrature points in 1D
     """
 
     if quadmethod=='GAUSS':
