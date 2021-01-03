@@ -11,7 +11,8 @@ from sympy import *
 import matplotlib.pyplot as plt
 
 def PiolaTransform(coord_E, Xhat):
-    """ This function maps Xhat=[xhat,yhat] in Ehat=[-1,1]^2 
+    """ Test of this function is passed! See test_FE_subroutines.py
+    This function maps Xhat=[xhat,yhat] in Ehat=[-1,1]^2 
     to X=(x,y) in E.
     or vector vhat in Ehat to v in E.
     Written based on eq. (3.3), (3.4) of AC paper 2016
@@ -57,7 +58,8 @@ def PiolaTransform(coord_E, Xhat):
     return X, DF_E, J_E
 
 def GetNormal(coord_E, Xhat):
-    """This function returns the normal n and coordinate (x,y) on edge in element E.
+    """Test of this function is passed! See test_FE_subroutines.py
+    This function returns the normal n and coordinate (x,y) on edge in element E.
     Input:
     ------
     coord_E: vertices coordinate of element E
@@ -111,7 +113,7 @@ def GetNormal(coord_E, Xhat):
     return n, X
 
 def VACred(coord_E, Xhat):
-    """ 
+    """
     See eq. (3.14), (3.12), (3.15) of AC paper, SIAM J 2016
     Note that (x,y) is defined on E
     and xhat, yhat is defined on Ehat
@@ -143,3 +145,103 @@ def VACred(coord_E, Xhat):
     V = np.block([v1,v2,v3,v4,v5,v6,sg1,sg2])
 
     return V
+
+def VondermondeMat(coord_E):
+    """
+    Input:
+    ------
+    coord_E: is the coordinate of vertices of element.
+    Note
+    3---4
+    |   |
+    1---2
+    Output:
+    ------
+    VM: the 8x8 vondermonde matrix
+    """
+    nl, X = GetNormal(coord_E, [-1., 0.])
+    nr, X = GetNormal(coord_E, [1., 0.])
+    nb, X = GetNormal(coord_E, [0., -1.])
+    nt, X = GetNormal(coord_E, [0., 1.])
+
+    V1 = VACred(coord_E, [-1,-1])
+    V2 = VACred(coord_E, [1,-1])
+    V3 = VACred(coord_E, [-1,1])
+    V4 = VACred(coord_E, [1,1])
+    # vondermonde matrix, V_ij = phi_j(x_i).n_i
+    VM = np.zeros((8,8))
+
+    for j in range(8):
+        VM[0,j] = np.dot(V1[:,j],nl)
+        VM[1,j] = np.dot(V1[:,j],nb)
+        VM[2,j] = np.dot(V2[:,j],nr)
+        VM[3,j] = np.dot(V2[:,j],nb)
+        VM[4,j] = np.dot(V3[:,j],nl)
+        VM[5,j] = np.dot(V3[:,j],nt)
+        VM[6,j] = np.dot(V4[:,j],nr)
+        VM[7,j] = np.dot(V4[:,j],nt)
+
+    return VM
+
+def GetQuadrature(Q, quadmethod):
+    """Test of this function is passed! See test_FE_subroutines.py
+    This function returns quadrature points (q) and its weight (w).
+    Input:
+    ------
+    Q: number of quadrature points you want
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    w, q: quadrature weights and quadrature points
+    """
+
+    if quadmethod=='GAUSS':
+        beta = []
+        alpha = range(1, Q)
+        for i in range(0,Q-1):
+            beta1 = 0.5/math.sqrt(1-(2*alpha[i])**(-2))
+            beta.append(beta1)
+
+        D, V = np.linalg.eig(np.diag(beta, k=1) + np.diag(beta, k=-1))
+        # we need to sort the eigenvalues, is not sorted
+        idx = np.argsort(D)
+        V = V[:,idx]
+        w = []
+        q = []
+        for i in range(0,Q):
+            w.append(2*V[0][i]**2)
+            q.append(D[idx[i]])
+
+    elif quadmethod=='LGL':
+        x = []
+        alpha = range(0, Q)
+        for i in range(0,Q):
+            x.append(-math.cos(math.pi*alpha[i]/(Q-1)))
+
+        x = np.array(x)
+        P = np.zeros((Q,Q))
+        xold = 2*np.ones(Q)
+        error = np.absolute(x-xold)
+        iteration = 0
+        for i in range(0,Q):
+            while (error[i] > 1e-16):
+                xold = x
+                
+                P[:,0] = 1
+                P[:,1] = x
+                for k in range(1,Q-1):
+                    P[:,k+1] = np.divide(((2*k+1)*(x*P[:,k]) - (k)*P[:,k-1]),k+1)
+
+                x = xold - np.divide(x*P[:,Q-1]-P[:,Q-2],Q*P[:,Q-1])
+                error = np.absolute(x-xold)
+                iteration+=1
+
+        w=np.divide(2,(Q-1)*Q*P[:,Q-1]**2)
+        q=x
+    else:
+        print("Error: quadmethod is wrong!Please enter 'GAUSS' or 'LGL'!")
+        sys.exit(1)
+    
+    return w, q
