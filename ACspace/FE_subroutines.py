@@ -393,7 +393,9 @@ def GetNodeCoord(nelx, nely):
 
 
 def Perm():
-
+    """ permeability is consider 1 as given
+    in MMS of AC paper.
+    """
     K = np.array([[1,0],[0,1]])
     return K
 
@@ -414,9 +416,6 @@ def GetElementMat(Q, quadmethod, nelx, nely, e):
                         [x[ce[2,0]][0], y[ce[2,0]][0]],
                         [x[ce[3,0]][0], y[ce[3,0]][0]]])
 
-    print(coord_E)
-    print(x)
-    print(y)
     w, q = GetQuadrature(Q,quadmethod)
     K = Perm()
     Kinv = np.linalg.inv(K)
@@ -435,6 +434,7 @@ def GetElementMat(Q, quadmethod, nelx, nely, e):
             X, DF_E, J_E = PiolaTransform(coord_E, [xhat,yhat])
             x = X[0][0]
             y = X[1][0]
+            # see sec.6 of AC paper 2016
             fp = np.array([[2*(math.pi)**2*math.sin(math.pi*x)*math.sin(math.pi*y)]])
             AC, div, N = ACbasis(coord_E,[xhat,yhat])
             In = np.append(In,N, axis=0)
@@ -490,14 +490,21 @@ def GetID_LM(nelx, nely):
 
 
 def Assembly(Q, quadmethod, nelx, nely):
-
+    """This function assenbles the final matrix problem.
+    Note that for the given MMS in sec.6 of AC paper 2016
+    the pressure is 
+    p(x,y) = sin(pi*x)*sin(pi*y) 
+    which is zero on the boundary of
+    the domain [0,1]^2, hence the traction term <p,v.n> on the boundary
+    is zero and I haven't considered yet.
+    """
     ID, LM = GetID_LM(nelx, nely)
     numelem = nelx*nely
     ndof = np.amax(LM) + 1
     neldof = 9
     temp = np.zeros((neldof,1),dtype=int)
     K = np.zeros((ndof,ndof))
-    F = np.zeros((ndof,1))
+    F = np.zeros((ndof,1)) 
     for e in range(numelem):
         Fe, Ke = GetElementMat(Q, quadmethod, nelx, nely, e)
         temp[:,0] = LM[:,e]
@@ -511,3 +518,47 @@ def Assembly(Q, quadmethod, nelx, nely):
                         K[I,J] = K[I,J] + Ke[i,j]
 
     return F, K
+
+def GetFESol(K,F,nelx,nely):
+
+    d = np.linalg.solve(K, F)
+    nodes = (nelx+1)*(nely+1)
+    numelem = nelx*nely
+    du = np.zeros((2*nodes,1))
+    dp = np.zeros((numelem,1))
+    for i in range(2*nodes):
+        du[i,0] = d[i,0]
+
+    for i in range(numelem):
+        dp[i] = d[2*nodes+i,0]
+
+    return dp, du
+
+
+
+def GetExactSol(nelx, nely):
+    """ based on sec. 6 AC paper 2016
+    p(x,y) = sin(pi*x)*sin(pi*y)
+    ux(x,y) = -pi*cos(pi*x)*sin(pi*y)
+    uy(x,y) = -pi*sin(pi*x)*cos(pi*y)
+    Note permeability is 1
+    """
+    x , y = GetNodeCoord(nelx, nely)
+    nodes = (nelx+1)*(nely+1)
+    numelem = nelx*nely
+    u  = np.zeros((2*nodes,1))
+    p = np.zeros((numelem,1))
+    xp = np.zeros((numelem,1))
+    yp = np.zeros((numelem,1))
+    for i in range(numelem):
+        xp[i][0] = (x[i][0]+x[i+1][0])/2
+        yp[i][0] = (y[i][0]+y[i+1][0])/2
+
+    for i in range(nodes):
+        u[2*i][0] = -math.pi*math.cos(math.pi*x[i][0])*math.sin(math.pi*y[i][0])
+        u[2*i+1][0] = -math.pi*math.sin(math.pi*x[i][0])*math.cos(math.pi*y[i][0])
+    for i in range(numelem):
+        p[i][0] = math.sin(math.pi*xp[i][0])*math.sin(math.pi*yp[i][0])
+
+    return p, u
+
