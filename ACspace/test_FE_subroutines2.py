@@ -120,9 +120,9 @@ class TestNormal2(unittest.TestCase):
         self.assertAlmostEqual(X[1][0],0.625,None,None,1e-8)
 
 
-class TestbasisUniform(unittest.TestCase):
+class TestNodalBasisUniform(unittest.TestCase):
 
-    #check the Nodal basis on uniform mesh
+    #check Nhat, the Nodal basis on uniform mesh
     def test_GetNodalBasis1(self):
         """ element E 
         3-------4    
@@ -190,9 +190,9 @@ class TestbasisUniform(unittest.TestCase):
         self.assertAlmostEqual(np.dot(Nhat[:,5],nt),0.0, None, None,1e-10)
 
 
-class TestbasisNonUniform(unittest.TestCase):
+class TestNodalBasisNonUniform(unittest.TestCase):
 
-    #check the Nodal basis on non-uniform mesh
+    #check Nhat the Nodal basis on non-uniform mesh
     def test_GetNodalBasis2(self):
         """ element E is taken from fig 3.5 of Zhen Tao PhD thesis
                  4
@@ -261,6 +261,51 @@ class TestbasisNonUniform(unittest.TestCase):
         self.assertAlmostEqual(np.dot(Nhat[:,3],nb),0.0, None, None,1e-10)
         self.assertAlmostEqual(np.dot(Nhat[:,4],nl),0.0, None, None,1e-10)
         self.assertAlmostEqual(np.dot(Nhat[:,5],nt),0.0, None, None,1e-10)
+
+class TestDivNodalBasis(unittest.TestCase):
+
+    #check Dhat the divergence of Nodal basis on non-uniform mesh
+    def test_GetDivNodalBasis(self):
+        """ element E is taken from fig 3.5 of Zhen Tao PhD thesis
+                 4
+                  \
+           3       \ 
+          /         \
+         /           \
+        1-------------2
+        """
+        coord_E = [[0.,0.],
+                   [1.,0.],
+                   [0.25,0.5],
+                   [0.75,0.75]]
+        nl, X = FE.GetNormal(coord_E, [-1., 0.])
+        nr, X = FE.GetNormal(coord_E, [1., 0.])
+        nb, X = FE.GetNormal(coord_E, [0., -1.])
+        nt, X = FE.GetNormal(coord_E, [0., 1.])
+        Dhat = FE.GetDivACNodalBasis(coord_E)
+
+        normals = np.block([[nl],[nb],[nr],[nb],[nl],[nt],[nr],[nt]])
+        # test with u = [x-y,x+y] ==>div(u) = 2
+        u = np.zeros((8,1))
+        for i in range(4):
+            x = coord_E[i][0]
+            y = coord_E[i][1]
+            u[2*i][0] = np.dot([x-y,x+y],normals[2*i,:])
+            u[2*i+1][0] = np.dot([x-y,x+y],normals[2*i+1,:])
+
+        const = Dhat @ u
+        self.assertEqual(const, 2.)
+
+        # test with u = [-y,x] ==>div(u) = 0
+        u = np.zeros((8,1))
+        for i in range(4):
+            x = coord_E[i][0]
+            y = coord_E[i][1]
+            u[2*i][0] = np.dot([-y,x],normals[2*i,:])
+            u[2*i+1][0] = np.dot([-y,x],normals[2*i+1,:])
+
+        const = Dhat @ u
+        self.assertEqual(const, 0.)
 
 
 def main():
