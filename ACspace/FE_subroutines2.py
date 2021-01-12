@@ -291,10 +291,20 @@ def GetQuadrature(Q, quadmethod):
     
     return w, q
 
-def GetInterpolateMat(coord_E,Q,quadmethod):
+
+def Perm():
+    """ permeability is consider 1 as given
+    in MMS of AC paper.
+    """
+    k = np.array([[1,0],[0,1]])
+    return k
+
+def GetMassMat(coord_E,Q,quadmethod):
     """This function returns the interpolation matrix at quadrature points
-    N_qi = Nhat_qj*(inv(VM))_ji, where Nhat_qj = phi_j(x_q), phi_j is
-    prime basis
+    N and mass matrix Me = N^T*W*N, where
+    W = diag(W1,W2,...Wq) and Wi = wi*Kinv where Kinv is inverse of permeability matrix
+    Wi is 2x2 matrix.
+
     Input:
     ------
     coord_E: coordinate of element E as 4x2 array
@@ -304,19 +314,29 @@ def GetInterpolateMat(coord_E,Q,quadmethod):
 
     Output:
     -------
-    N: the nodal interpolation matrix computed at quadrature points
-    shape (2*Q*Q,8), again Q is quadrature points in 1D
+    N: Nodal basis evaluated at quadrature points
+    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
+    Me: the nodal interpolation matrix computed at quadrature points
+    shape (8,8), 
     """
-
+    k = Perm()
+    kinv = np.linalg.inv(k)
     w, q = GetQuadrature(Q, quadmethod)
     N = np.zeros((0,8))
+    W = np.zeros((2*Q*Q,2*Q*Q))
     for i in range(Q):
             for j in range(Q):
                 xhat = q[j]
                 yhat = q[i]
+                ww = w[i]*w[j]
                 Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
                 N = np.append(N,Nhat, axis=0)
+                W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww
+                W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww
+                W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww
+                W[2*j+1+2*Q*i][2*j+1+2*Q*i]=kinv[1][1]*ww
 
-    return N
+    Me = N.T @ W @ N
 
+    return N, Me
 
