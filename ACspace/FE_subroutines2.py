@@ -340,3 +340,41 @@ def GetMassMat(coord_E,Q,quadmethod):
 
     return N, Me
 
+def GetDivMat(coord_E,Q,quadmethod):
+    """This function returns the interpolation matrix at quadrature points
+    N and mass matrix Me = N^T*W*N, where
+    W = diag(W1,W2,...Wq) and Wi = wi*Kinv where Kinv is inverse of permeability matrix
+    Wi is 2x2 matrix.
+
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    N: Nodal basis evaluated at quadrature points
+    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
+    Me: the nodal interpolation matrix computed at quadrature points
+    shape (8,8), 
+    """
+    w, q = GetQuadrature(Q, quadmethod)
+    D = np.zeros((0,8))
+    Nhatp = np.array([[1]])
+    Np = np.zeros((0,1))
+    W = np.zeros((Q*Q,Q*Q))
+    for i in range(Q):
+            for j in range(Q):
+                xhat = q[j]
+                yhat = q[i]
+                ww = w[i]*w[j]
+                Dhat = GetDivACNodalBasis(coord_E)
+                D = np.append(D,Dhat, axis=0)
+                W[j+Q*i][j+Q*i] = ww
+                Np = np.append(Nhatp,Np,axis=0)
+
+    Be = Np.T @ W @ D
+
+    return Be
