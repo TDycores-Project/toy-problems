@@ -370,3 +370,22 @@ def GetDivMat(coord_E,Q,quadmethod):
     Be = Np.T @ W @ D
 
     return Be
+
+def GetConnectivity(nelx, nely):
+
+    numelem = nelx*nely
+    nodex = nelx + 1
+    nodey = nely + 1
+    IEN = np.zeros((4,numelem), dtype=int)
+
+    for j in range(0,nely):
+        for i in range(0,nelx):
+            ele = (j)*nelx + i
+            
+            IEN[0][ele] = i + j*nodex
+            IEN[1][ele] = i + j*nodex + 1
+            IEN[2][ele] = i + j*nodex + nodex
+            IEN[3][ele] = i + j*nodex + nodex + 1
+
+    return IEN
+
