@@ -365,7 +365,7 @@ def GetDivMat(coord_E,Q,quadmethod):
                 Dhat = GetDivACNodalBasis(coord_E)
                 D = np.append(D,Dhat, axis=0)
                 W[j+Q*i][j+Q*i] = ww
-                Np = np.append(Nhatp,Np,axis=0)
+                Np = np.append(Np,Nhatp,axis=0)
 
     Be = Np.T @ W @ D
 
