@@ -164,23 +164,15 @@ def VondermondeMat(coord_E):
     nr, X = GetNormal(coord_E, [1., 0.])
     nb, X = GetNormal(coord_E, [0., -1.])
     nt, X = GetNormal(coord_E, [0., 1.])
-
-    V1 = VACred(coord_E, [-1,-1])
-    V2 = VACred(coord_E, [1,-1])
-    V3 = VACred(coord_E, [-1,1])
-    V4 = VACred(coord_E, [1,1])
+    normals = np.block([[nl],[nb],[nr],[nb],[nl],[nt],[nr],[nt]])
+    nodes = np.block([[-1,-1],[-1,-1],[1,-1],[1,-1],[-1,1],[-1,1],[1,1],[1,1]])
     # vondermonde matrix, V_ij = phi_j(x_i).n_i
     VM = np.zeros((8,8))
 
-    for j in range(8):
-        VM[0,j] = np.dot(V1[:,j],nl)
-        VM[1,j] = np.dot(V1[:,j],nb)
-        VM[2,j] = np.dot(V2[:,j],nr)
-        VM[3,j] = np.dot(V2[:,j],nb)
-        VM[4,j] = np.dot(V3[:,j],nl)
-        VM[5,j] = np.dot(V3[:,j],nt)
-        VM[6,j] = np.dot(V4[:,j],nr)
-        VM[7,j] = np.dot(V4[:,j],nt)
+    for i in range(8):
+        for j in range(8):
+            V = VACred(coord_E, nodes[i,:])
+            VM[i,j] = np.dot(V[:,j],normals[i,:])
 
     return VM
 
