@@ -184,6 +184,50 @@ def VondermondeMat(coord_E):
 
     return VM
 
+
+def GetACNodalBasis(coord_E,Xhat):
+    """This function returns the AC Nodal basis at point Xhat=[xhat,yhat]
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Xhat: is the coordinate at reference element [-1,1]^2
+
+    Output:
+    -------
+    Nhat: the nodal basis computed at Xhat=[xhat,yhat]
+    shape (2,8) as
+    Nhat = [v11,v12,v21,v22,v31,v32,v41,v42]
+    """
+    VM = VondermondeMat(coord_E)
+    V = VACred(coord_E, Xhat)
+    invVM = np.linalg.inv(VM)
+    Nhat = V @ invVM
+
+    return Nhat
+
+
+def GetDivACNodalBasis(coord_E):
+    """This function returns the divergence of AC Nodal basis at point Xhat=[xhat,yhat]
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Xhat: is the coordinate at reference element [-1,1]^2
+
+    Output:
+    -------
+    Dhat: the divergence of nodal basis computed at Xhat=[xhat,yhat]
+    shape (1,8)
+    """
+    VM = VondermondeMat(coord_E)
+    # This is the divergence of prime basis given
+    # in VACred functions
+    divV = np.array([[0, 1, 0, 0, 0, 1, 0, 0]])
+    invVM = np.linalg.inv(VM)
+    Dhat = divV @ invVM
+
+    return Dhat
+
+
 def GetQuadrature(Q, quadmethod):
     """Test of this function is passed! See test_FE_subroutines.py
     This function returns quadrature points (q) and its weight (w).
@@ -265,16 +309,14 @@ def GetInterpolateMat(coord_E,Q,quadmethod):
     """
 
     w, q = GetQuadrature(Q, quadmethod)
-    VM = VondermondeMat(coord_E)
-    Nhat = np.zeros((0,8))
+    N = np.zeros((0,8))
     for i in range(Q):
             for j in range(Q):
                 xhat = q[j]
                 yhat = q[i]
-                V = VACred(coord_E, [xhat,yhat])
-                Nhat = np.append(Nhat,V, axis=0)
-
-    invVM = np.linalg.inv(VM)
-    N = Nhat @ invVM.T
+                Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
+                N = np.append(N,Nhat, axis=0)
 
     return N
+
+
