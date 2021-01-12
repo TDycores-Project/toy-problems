@@ -389,3 +389,53 @@ def GetConnectivity(nelx, nely):
 
     return IEN
 
+def GetNodeCoord(nelx, nely):
+    """ This function returns the physical coordinates of the nodes.
+    Input:
+    ------
+    nelx:   integer
+            number of elements in the x direction.
+    nely:   integer
+            number of elements in the y direction.
+    Output:
+    -------
+    x:      float (1d array)
+            the coordinate of the node in the x direction
+    y:      float (1d array)
+            the coordinate of the node in the y direction
+    The geometry we are working on is like the following.
+    (for nelx = 2, nely = 2)
+    6---------7----------8
+    |         |   (3)    |
+    |   (2)   |      ----5
+    |      ---4-----/    |
+    3-----/   |   (1)    |
+    |         |      ----2
+    |   (0)   |     /
+    |     ----1----/
+    0----/
+    There are 4 elements (numbering in parenthesis), and 9 nodes.
+    Bottom edge (0 to 1) is y=0.5x^2. (see src/test_subroutines.py)
+    This function returns x,y as 9x2 array for the above mesh.
+    """
+    nodex = nelx + 1
+    nodey = nely + 1
+    numnodes = nodex*nodey
+    
+    # Divide [0,1] by nodex (mesh in the x direction)
+    x0 = np.linspace(0, 1, nodex)
+    y0 = 0.0 * x0**2               # the bottom geometry line
+
+    y = np.zeros((numnodes, 1))
+    for i in range(0, nodex):
+        # Divide [0,1] by nodey (mesh in the y direction)
+        y1 = np.linspace(y0[i], 1, nodey)
+        for j in range(0, nodey):
+            y[i + j*nodex] = y1[j]   # collection of y
+
+    x = np.zeros((numnodes, 1))
+    for i in range(0, nodey):
+        for j in range(0, nodex):
+            x[j + i*nodex] = x0[j]   # collection of x
+
+    return x, y
