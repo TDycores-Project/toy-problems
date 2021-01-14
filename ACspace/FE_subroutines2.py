@@ -216,3 +216,153 @@ def GetDivACNodalBasis(coord_E):
     Dhat = divV @ invVM
 
     return Dhat
+
+def GetQuadrature(Q, quadmethod):
+    """Test of this function is passed! See test_FE_subroutines.py
+    This function returns quadrature points (q) and its weight (w).
+    Input:
+    ------
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    w, q: quadrature weights and quadrature points in 1D
+    """
+
+    if quadmethod=='GAUSS':
+        beta = []
+        alpha = range(1, Q)
+        for i in range(0,Q-1):
+            beta1 = 0.5/math.sqrt(1-(2*alpha[i])**(-2))
+            beta.append(beta1)
+
+        D, V = np.linalg.eig(np.diag(beta, k=1) + np.diag(beta, k=-1))
+        # we need to sort the eigenvalues, is not sorted
+        idx = np.argsort(D)
+        V = V[:,idx]
+        w = []
+        q = []
+        for i in range(0,Q):
+            w.append(2*V[0][i]**2)
+            q.append(D[idx[i]])
+
+    elif quadmethod=='LGL':
+        x = []
+        alpha = range(0, Q)
+        for i in range(0,Q):
+            x.append(-math.cos(math.pi*alpha[i]/(Q-1)))
+
+        x = np.array(x)
+        P = np.zeros((Q,Q))
+        xold = 2*np.ones(Q)
+        error = np.absolute(x-xold)
+        iteration = 0
+        for i in range(0,Q):
+            while (error[i] > 1e-16):
+                xold = x
+                
+                P[:,0] = 1
+                P[:,1] = x
+                for k in range(1,Q-1):
+                    P[:,k+1] = np.divide(((2*k+1)*(x*P[:,k]) - (k)*P[:,k-1]),k+1)
+
+                x = xold - np.divide(x*P[:,Q-1]-P[:,Q-2],Q*P[:,Q-1])
+                error = np.absolute(x-xold)
+                iteration+=1
+
+        w=np.divide(2,(Q-1)*Q*P[:,Q-1]**2)
+        q=x
+    else:
+        print("Error: quadmethod is wrong!Please enter 'GAUSS' or 'LGL'!")
+        sys.exit(1)
+    
+    return w, q
+
+def Perm():
+    """ permeability is consider 1 as given
+    in MMS of AC paper.
+    """
+    k = np.array([[1,0],[0,1]])
+    return k
+
+def GetMassMat(coord_E,Q,quadmethod):
+    """This function returns the interpolation matrix at quadrature points
+    N and mass matrix Me = N^T*W*N, where
+    W = diag(W1,W2,...Wq) and Wi = wi*Kinv where Kinv is inverse of permeability matrix
+    Wi is 2x2 matrix.
+
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    N: Nodal basis evaluated at quadrature points
+    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
+    Me: the nodal interpolation matrix computed at quadrature points
+    shape (8,8), 
+    """
+    k = Perm()
+    kinv = np.linalg.inv(k)
+    w, q = GetQuadrature(Q, quadmethod)
+    N = np.zeros((0,8))
+    W = np.zeros((2*Q*Q,2*Q*Q))
+    for i in range(Q):
+            for j in range(Q):
+                xhat = q[j]
+                yhat = q[i]
+                ww = w[i]*w[j]
+                Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
+                N = np.append(N,Nhat, axis=0)
+                W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww
+                W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww
+                W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww
+                W[2*j+1+2*Q*i][2*j+1+2*Q*i]=kinv[1][1]*ww
+
+    Me = N.T @ W @ N
+
+    return N, Me
+
+def GetDivMat(coord_E,Q,quadmethod):
+    """This function returns the interpolation matrix at quadrature points
+    N and mass matrix Me = N^T*W*N, where
+    W = diag(W1,W2,...Wq) and Wi = wi*Kinv where Kinv is inverse of permeability matrix
+    Wi is 2x2 matrix.
+
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    N: Nodal basis evaluated at quadrature points
+    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
+    Me: the nodal interpolation matrix computed at quadrature points
+    shape (8,8), 
+    """
+    w, q = GetQuadrature(Q, quadmethod)
+    D = np.zeros((0,8))
+    Nhatp = np.array([[1]])
+    Np = np.zeros((0,1))
+    W = np.zeros((Q*Q,Q*Q))
+    for i in range(Q):
+            for j in range(Q):
+                xhat = q[j]
+                yhat = q[i]
+                ww = w[i]*w[j]
+                Dhat = GetDivACNodalBasis(coord_E)
+                D = np.append(D,Dhat, axis=0)
+                W[j+Q*i][j+Q*i] = ww
+                Np = np.append(Np,Nhatp,axis=0)
+
+    Be = Np.T @ W @ D
+
+    return Be
