@@ -296,15 +296,14 @@ class TestDivNodalBasis(unittest.TestCase):
         normals = np.block([[nb],[nb],[nr],[nr],[nt],[nt],[nl],[nl]])
         nodes = np.block([coord_E[0,:],coord_E[1,:],coord_E[1,:],coord_E[2,:],
                           coord_E[2,:],coord_E[3,:],coord_E[3,:],coord_E[0,:]])
-        print(nodes)
+                          
         # test with u = [x-y,x+y] ==>div(u) = 2
         u = np.zeros((8,1))
         for i in range(8):
             x = nodes[2*i]
             y = nodes[2*i+1]
             u[i][0] = np.dot([x-y,x+y],normals[i,:])
-        print(Dhat)
-        print(u)
+
         const = Dhat @ u
         self.assertAlmostEqual(const[0][0],2.0, None, None,1e-10)
 
