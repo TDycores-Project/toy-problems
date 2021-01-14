@@ -24,7 +24,7 @@ def PiolaTransform(coord_E, Xhat):
                [x1,y1],
                [x2,y2],
                [x3,y3]] with vertices numbering
-    2----3
+    3----2
     |    |
     0----1
     Xhat = [xhat, yhat] in Ehat
@@ -40,14 +40,14 @@ def PiolaTransform(coord_E, Xhat):
     yhat = Xhat[1]
     P = 0.25 * np.array([[(1-xhat)*(1-yhat),
                           (1+xhat)*(1-yhat),
-                          (1-xhat)*(1+yhat),
-                          (1+xhat)*(1+yhat)]])
+                          (1+xhat)*(1+yhat),
+                          (1-xhat)*(1+yhat)]])
     P_E = P @ coord_E
     # x=F_E(xhat)
     X = P_E.T
     # gradient of P, 1st row = dP/dxhat, 2nd row=dP/dyhat
-    GradP = 0.25 * np.array([[-(1-yhat),(1-yhat),-(1+yhat),(1+yhat)],
-                             [-(1-xhat),-(1+xhat),(1-xhat),(1+xhat)]])
+    GradP = 0.25 * np.array([[-(1-yhat),(1-yhat),(1+yhat),-(1+yhat)],
+                             [-(1-xhat),-(1+xhat),(1+xhat),(1-xhat)]])
 
     # DF_E = [[dx/dxhat, dx/dyhat],
     #         [dy/dxhat, dy/dyhat]]
@@ -153,7 +153,7 @@ def VondermondeMat(coord_E):
     ------
     coord_E: is the coordinate of vertices of element.
     Note
-    3---4
+    4---3
     |   |
     1---2
     Output:
@@ -164,8 +164,8 @@ def VondermondeMat(coord_E):
     nr, X = GetNormal(coord_E, [1., 0.])
     nb, X = GetNormal(coord_E, [0., -1.])
     nt, X = GetNormal(coord_E, [0., 1.])
-    normals = np.block([[nl],[nb],[nr],[nb],[nl],[nt],[nr],[nt]])
-    nodes = np.block([[-1,-1],[-1,-1],[1,-1],[1,-1],[-1,1],[-1,1],[1,1],[1,1]])
+    normals = np.block([[nb],[nb],[nr],[nr],[nt],[nt],[nl],[nl]])
+    nodes = np.block([[-1,-1],[1,-1],[1,-1],[1,1],[1,1],[-1,1],[-1,1],[-1,-1]])
     # vondermonde matrix, V_ij = phi_j(x_i).n_i
     VM = np.zeros((8,8))
 
@@ -175,7 +175,6 @@ def VondermondeMat(coord_E):
             VM[i,j] = np.dot(V[:,j],normals[i,:])
 
     return VM
-
 
 def GetACNodalBasis(coord_E,Xhat):
     """This function returns the AC Nodal basis at point Xhat=[xhat,yhat]
@@ -197,7 +196,6 @@ def GetACNodalBasis(coord_E,Xhat):
 
     return Nhat
 
-
 def GetDivACNodalBasis(coord_E):
     """This function returns the divergence of AC Nodal basis at point Xhat=[xhat,yhat]
     Input:
@@ -218,255 +216,3 @@ def GetDivACNodalBasis(coord_E):
     Dhat = divV @ invVM
 
     return Dhat
-
-
-def GetQuadrature(Q, quadmethod):
-    """Test of this function is passed! See test_FE_subroutines.py
-    This function returns quadrature points (q) and its weight (w).
-    Input:
-    ------
-    Q: number of quadrature points you want in 1D
-    quadmethod: The method for computing q and w
-    either 'GAUSS' or 'LGL'
-
-    Output:
-    -------
-    w, q: quadrature weights and quadrature points in 1D
-    """
-
-    if quadmethod=='GAUSS':
-        beta = []
-        alpha = range(1, Q)
-        for i in range(0,Q-1):
-            beta1 = 0.5/math.sqrt(1-(2*alpha[i])**(-2))
-            beta.append(beta1)
-
-        D, V = np.linalg.eig(np.diag(beta, k=1) + np.diag(beta, k=-1))
-        # we need to sort the eigenvalues, is not sorted
-        idx = np.argsort(D)
-        V = V[:,idx]
-        w = []
-        q = []
-        for i in range(0,Q):
-            w.append(2*V[0][i]**2)
-            q.append(D[idx[i]])
-
-    elif quadmethod=='LGL':
-        x = []
-        alpha = range(0, Q)
-        for i in range(0,Q):
-            x.append(-math.cos(math.pi*alpha[i]/(Q-1)))
-
-        x = np.array(x)
-        P = np.zeros((Q,Q))
-        xold = 2*np.ones(Q)
-        error = np.absolute(x-xold)
-        iteration = 0
-        for i in range(0,Q):
-            while (error[i] > 1e-16):
-                xold = x
-                
-                P[:,0] = 1
-                P[:,1] = x
-                for k in range(1,Q-1):
-                    P[:,k+1] = np.divide(((2*k+1)*(x*P[:,k]) - (k)*P[:,k-1]),k+1)
-
-                x = xold - np.divide(x*P[:,Q-1]-P[:,Q-2],Q*P[:,Q-1])
-                error = np.absolute(x-xold)
-                iteration+=1
-
-        w=np.divide(2,(Q-1)*Q*P[:,Q-1]**2)
-        q=x
-    else:
-        print("Error: quadmethod is wrong!Please enter 'GAUSS' or 'LGL'!")
-        sys.exit(1)
-    
-    return w, q
-
-
-def Perm():
-    """ permeability is consider 1 as given
-    in MMS of AC paper.
-    """
-    k = np.array([[1,0],[0,1]])
-    return k
-
-def GetMassMat(coord_E,Q,quadmethod):
-    """This function returns the interpolation matrix at quadrature points
-    N and mass matrix Me = N^T*W*N, where
-    W = diag(W1,W2,...Wq) and Wi = wi*Kinv where Kinv is inverse of permeability matrix
-    Wi is 2x2 matrix.
-
-    Input:
-    ------
-    coord_E: coordinate of element E as 4x2 array
-    Q: number of quadrature points you want in 1D
-    quadmethod: The method for computing q and w
-    either 'GAUSS' or 'LGL'
-
-    Output:
-    -------
-    N: Nodal basis evaluated at quadrature points
-    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
-    Me: the nodal interpolation matrix computed at quadrature points
-    shape (8,8), 
-    """
-    k = Perm()
-    kinv = np.linalg.inv(k)
-    w, q = GetQuadrature(Q, quadmethod)
-    N = np.zeros((0,8))
-    W = np.zeros((2*Q*Q,2*Q*Q))
-    for i in range(Q):
-            for j in range(Q):
-                xhat = q[j]
-                yhat = q[i]
-                ww = w[i]*w[j]
-                Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
-                N = np.append(N,Nhat, axis=0)
-                W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww
-                W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww
-                W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww
-                W[2*j+1+2*Q*i][2*j+1+2*Q*i]=kinv[1][1]*ww
-
-    Me = N.T @ W @ N
-
-    return N, Me
-
-def GetDivMat(coord_E,Q,quadmethod):
-    """This function returns the interpolation matrix at quadrature points
-    N and mass matrix Me = N^T*W*N, where
-    W = diag(W1,W2,...Wq) and Wi = wi*Kinv where Kinv is inverse of permeability matrix
-    Wi is 2x2 matrix.
-
-    Input:
-    ------
-    coord_E: coordinate of element E as 4x2 array
-    Q: number of quadrature points you want in 1D
-    quadmethod: The method for computing q and w
-    either 'GAUSS' or 'LGL'
-
-    Output:
-    -------
-    N: Nodal basis evaluated at quadrature points
-    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
-    Me: the nodal interpolation matrix computed at quadrature points
-    shape (8,8), 
-    """
-    w, q = GetQuadrature(Q, quadmethod)
-    D = np.zeros((0,8))
-    Nhatp = np.array([[1]])
-    Np = np.zeros((0,1))
-    W = np.zeros((Q*Q,Q*Q))
-    for i in range(Q):
-            for j in range(Q):
-                xhat = q[j]
-                yhat = q[i]
-                ww = w[i]*w[j]
-                Dhat = GetDivACNodalBasis(coord_E)
-                D = np.append(D,Dhat, axis=0)
-                W[j+Q*i][j+Q*i] = ww
-                Np = np.append(Np,Nhatp,axis=0)
-
-    Be = Np.T @ W @ D
-
-    return Be
-
-def GetConnectivity(nelx, nely):
-
-    numelem = nelx*nely
-    nodex = nelx + 1
-    nodey = nely + 1
-    IEN = np.zeros((4,numelem), dtype=int)
-
-    for j in range(0,nely):
-        for i in range(0,nelx):
-            ele = (j)*nelx + i
-            
-            IEN[0][ele] = i + j*nodex
-            IEN[1][ele] = i + j*nodex + 1
-            IEN[2][ele] = i + j*nodex + nodex
-            IEN[3][ele] = i + j*nodex + nodex + 1
-
-    return IEN
-
-def GetNodeCoord(nelx, nely):
-    """ This function returns the physical coordinates of the nodes.
-    Input:
-    ------
-    nelx:   integer
-            number of elements in the x direction.
-    nely:   integer
-            number of elements in the y direction.
-    Output:
-    -------
-    x:      float (1d array)
-            the coordinate of the node in the x direction
-    y:      float (1d array)
-            the coordinate of the node in the y direction
-    The geometry we are working on is like the following.
-    (for nelx = 2, nely = 2)
-    6---------7----------8
-    |         |   (3)    |
-    |   (2)   |      ----5
-    |      ---4-----/    |
-    3-----/   |   (1)    |
-    |         |      ----2
-    |   (0)   |     /
-    |     ----1----/
-    0----/
-    There are 4 elements (numbering in parenthesis), and 9 nodes.
-    Bottom edge (0 to 1) is y=0.5x^2. (see src/test_subroutines.py)
-    This function returns x,y as 9x2 array for the above mesh.
-    """
-    nodex = nelx + 1
-    nodey = nely + 1
-    numnodes = nodex*nodey
-    
-    # Divide [0,1] by nodex (mesh in the x direction)
-    x0 = np.linspace(0, 1, nodex)
-    y0 = 0.0 * x0**2               # the bottom geometry line
-
-    y = np.zeros((numnodes, 1))
-    for i in range(0, nodex):
-        # Divide [0,1] by nodey (mesh in the y direction)
-        y1 = np.linspace(y0[i], 1, nodey)
-        for j in range(0, nodey):
-            y[i + j*nodex] = y1[j]   # collection of y
-
-    x = np.zeros((numnodes, 1))
-    for i in range(0, nodey):
-        for j in range(0, nodex):
-            x[j + i*nodex] = x0[j]   # collection of x
-
-    return x, y
-
-def GetID_LM(nelx, nely):
-
-    nodex = nelx + 1
-    nodey = nely + 1
-    numnodes = nodex*nodey
-    numelem = nelx*nely
-    ndof_u = 8
-    ID = np.zeros((2,numnodes), dtype=int)
-    for i in range(0,numnodes):
-        for j in range(0,2):
-            ID[j][i] = 2*i + j
-    IEN = GetConnectivity(nelx, nely)
-    LMu = np.zeros((ndof_u,numelem), dtype=int)
-    for i in range(0,numelem):
-        for j in range(0,4):
-            idd1 = ID[0][IEN[j][i]]
-            idd2 = ID[1][IEN[j][i]]
-            LMu[2*j][i] = idd1
-            LMu[2*j+1][i] = idd2
-
-    # add pressure dof to LM
-    ndof_p = 1
-    maxLMu = np.amax(LMu)
-    LMp = np.zeros((ndof_p,numelem), dtype=int)
-    for i in range(0,numelem):
-        LMp[0][i] = maxLMu + i + 1
-
-    LM = np.block([[LMu],[LMp]])
-
-    return ID, LM
