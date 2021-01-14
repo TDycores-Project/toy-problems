@@ -328,6 +328,107 @@ class TestDivNodalBasis(unittest.TestCase):
         self.assertAlmostEqual(const[0][0],-1.0, None, None,1e-10)
 
 
+class TestQuadrature(unittest.TestCase):
+
+    def test_GAUSS1(self):
+        delta = 1e-4
+        ww2 = [1., 1.]
+        qq2 = [-0.5774, 0.5774]
+        w, q = FE.GetQuadrature(2,'GAUSS')
+        for i in range(0,2):
+            self.assertAlmostEqual(ww2[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq2[i], q[i],None,None,delta)
+    
+    def test_GAUSS2(self):
+        delta = 1e-4
+        ww3 = [0.5556,  0.8889,  0.5556]
+        qq3 = [-0.7746,      0,  0.7746]
+        w, q = FE.GetQuadrature(3,'GAUSS')
+        for i in range(0,3):
+            self.assertAlmostEqual(ww3[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq3[i], q[i],None,None,delta)
+    def test_GAUSS3(self):
+        delta = 1e-4
+        ww5 = [0.2369,    0.4786,    0.5689,    0.4786,    0.2369]
+        qq5 = [-0.9062,   -0.5385,    0.0000,    0.5385,    0.9062]
+        w, q = FE.GetQuadrature(5,'GAUSS')
+        for i in range(0,5):
+            self.assertAlmostEqual(ww5[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq5[i], q[i],None,None,delta)
+    def test_LGL1(self):
+        delta = 1e-4
+        ww2 = [1., 1.]
+        qq2 = [-1., 1.]
+        w, q = FE.GetQuadrature(2,'LGL')
+        for i in range(0,2):
+            self.assertAlmostEqual(ww2[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq2[i], q[i],None,None,delta)
+    
+    def test_LGL2(self):
+        delta = 1e-4
+        ww3 = [0.3333,    1.3333,    0.3333]
+        qq3 = [-1.,      0,  1.]
+        w, q = FE.GetQuadrature(3,'LGL')
+        for i in range(0,3):
+            self.assertAlmostEqual(ww3[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq3[i], q[i],None,None,delta)
+    def test_LGL3(self):
+        delta = 1e-4
+        ww5 = [0.1000,    0.5444,    0.7111,    0.5444,    0.1000]
+        qq5 = [-1.0000,   -0.6547,         0,    0.6547,    1.0000]
+        w, q = FE.GetQuadrature(5,'LGL')
+        for i in range(0,5):
+            self.assertAlmostEqual(ww5[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq5[i], q[i],None,None,delta)
+
+
+class TestConnectivity(unittest.TestCase):
+
+    def test_connectivity1(self):
+        IEN1 = np.array([[0, 1],
+                         [3, 4],
+                         [5, 6],
+                         [2, 3]])
+
+        IEN = FE.GetConnectivity(2,1)
+        for i in range(4):
+            for j in range(2):
+                self.assertEqual(IEN1[i][j], IEN[i][j])
+
+    def test_connectivity2(self):
+        IEN1 = np.array([[0, 3],
+                         [2, 5],
+                         [3, 6],
+                         [1, 4]])
+
+        IEN = FE.GetConnectivity(1,2)
+        for i in range(4):
+            for j in range(2):
+                self.assertEqual(IEN1[i][j], IEN[i][j])
+
+    def test_connectivity3(self):
+            IEN1 = np.array([[0, 1, 5, 6],
+                             [3, 4, 8, 9],
+                             [5, 6, 10,11],
+                             [2, 3, 7, 8]])
+
+            IEN = FE.GetConnectivity(2,2)
+            for i in range(4):
+                for j in range(4):
+                    self.assertEqual(IEN1[i][j], IEN[i][j])
+
+    def test_connectivity4(self):
+            IEN1 = np.array([[0, 1, 2, 7, 8, 9],
+                             [4, 5, 6, 11, 12, 13],
+                             [7, 8, 9, 14, 15, 16],
+                             [3, 4, 5, 10, 11, 12]])
+
+            IEN = FE.GetConnectivity(3,2)
+            for i in range(4):
+                for j in range(6):
+                    self.assertEqual(IEN1[i][j], IEN[i][j])
+
+
 def main():
     unittest.main()
 
