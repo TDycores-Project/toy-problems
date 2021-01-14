@@ -393,22 +393,54 @@ def GetConnectivity(nelx, nely):
     """
     # number of element
     numelem = nelx*nely
-    # number of edges perpendicular to x-axis
-    edge_x = nelx + 1
-    # number of edges perpendicular to y-axis
-    edge_y = nely + 1
+    # number of nodes in x-direction
+    nodex = nelx + 1
+    # number of nodes in y-direction
+    nodey = nely + 1
     IEN = np.zeros((4,numelem), dtype=int)
 
     for j in range(0,nely):
         for i in range(0,nelx):
             ele = (j)*nelx + i
             
-            IEN[0][ele] = i + j*(edge_x+nelx)
-            IEN[1][ele] = i + j*(edge_x+nelx) + edge_x
-            IEN[2][ele] = i + j*(edge_x+nelx) + (edge_x+nelx)
-            IEN[3][ele] = i + j*(edge_x+nelx) + nelx
+            IEN[0][ele] = i + j*(nodex+nelx)
+            IEN[1][ele] = i + j*(nodex+nelx) + nodex
+            IEN[2][ele] = i + j*(nodex+nelx) + (nodex+nelx)
+            IEN[3][ele] = i + j*(nodex+nelx) + nelx
 
     return IEN
+
+def GetID_LM(nelx, nely):
+
+    nodex = nelx + 1
+    nodey = nely + 1
+    numnodes = nodex*nodey
+    numelem = nelx*nely
+    numedges = (nodex*nely) + (nodey*nelx)
+    ndof_u = 8
+    ID = np.zeros((2,numedges), dtype=int)
+    for i in range(0,numedges):
+        for j in range(0,2):
+            ID[j][i] = 2*i + j
+    IEN = GetConnectivity(nelx, nely)
+    LMu = np.zeros((ndof_u,numelem), dtype=int)
+    for i in range(0,numelem):
+        for j in range(0,4):
+            idd1 = ID[0][IEN[j][i]]
+            idd2 = ID[1][IEN[j][i]]
+            LMu[2*j][i] = idd1
+            LMu[2*j+1][i] = idd2
+
+    # add pressure dof to LM
+    ndof_p = 1
+    maxLMu = np.amax(LMu)
+    LMp = np.zeros((ndof_p,numelem), dtype=int)
+    for i in range(0,numelem):
+        LMp[0][i] = maxLMu + i + 1
+
+    LM = np.block([[LMu],[LMp]])
+
+    return ID, LM
 
 def GetNodeCoord(nelx, nely):
     """ This function returns the physical coordinates of the nodes.
@@ -461,4 +493,6 @@ def GetNodeCoord(nelx, nely):
 
     return x, y
 
-
+ID, LM = GetID_LM(3,2)
+print(ID)
+print(LM)
