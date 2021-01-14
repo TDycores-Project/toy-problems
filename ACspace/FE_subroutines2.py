@@ -366,3 +366,35 @@ def GetDivMat(coord_E,Q,quadmethod):
     Be = Np.T @ W @ D
 
     return Be
+
+def GetConnectivity(nelx, nely):
+    """This function returns the connectivity array based on edge
+    ----6--------7----
+    |       |        |
+    3       4        5
+    |       |        |
+    ----1--------2----
+    in above we have 3 edges perpendicular to x-axis
+    and 2 edges perpendicular to y-axis
+    local numbering of one element is
+    ----3----
+    |       |
+    4       2
+    |       |
+    ----1----
+    """
+    numelem = nelx*nely
+    edge_x = nelx + 1
+    edge_y = nely + 1
+    IEN = np.zeros((4,numelem), dtype=int)
+
+    for j in range(0,nely):
+        for i in range(0,nelx):
+            ele = (j)*nelx + i
+            
+            IEN[0][ele] = i + j*(edge_x+nelx)
+            IEN[1][ele] = i + j*(edge_x+nelx) + edge_x
+            IEN[2][ele] = i + j*(edge_x+nelx) + (edge_x+nelx)
+            IEN[3][ele] = i + j*(edge_x+nelx) + nelx
+
+    return IEN
