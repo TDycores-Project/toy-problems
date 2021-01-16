@@ -1,7 +1,6 @@
 """ This file includes the necessary modules for
 implementing AC mixed-FEM. 
 See TODD ARBOGAST, MAICON R. CORREA, SIAM journal 2016
-Here I create the Vondermonde matrix explicitly
 """
 
 import numpy as np
@@ -550,74 +549,3 @@ def DivOperator(nelx, nely, e):
     Ke = np.block([[Me,Dhat.T],[Dhat,0]])
 
     return ue, Ke
-
-def AssembleDivOperator(nelx, nely):
-
-    ID, LM, LMu = GetID_LM(nelx, nely)
-    numelem = nelx*nely
-    ndof = np.amax(LM) + 1
-    ndofu = np.amax(LMu) + 1
-    neldof = 9
-    temp = np.zeros((neldof,1),dtype=int)
-    K = np.zeros((ndof,ndof))
-    for e in range(numelem):
-        Ue, Ke = DivOperator(nelx, nely, e)
-        temp[:,0] = LM[:,e]
-        for i in range(neldof):
-            I = temp[i,0]
-            if I>-1:
-                for j in range(neldof):
-                    J = temp[j,0]
-                    if J>-1:
-                        K[I,J] = K[I,J] + Ke[i,j]
-
-    Div = np.zeros((numelem,ndofu))
-    for i in range(numelem):
-        for j in range(ndofu):
-            Div[i][j] = K[i+ndofu][j]
-
-    return Div
-
-def AssembleU(nelx, nely):
-
-    ID, LM, LMu = GetID_LM(nelx, nely)
-    numelem = nelx*nely
-    ndof = np.amax(LMu) + 1
-    neldof = 8
-    temp = np.zeros((neldof,1),dtype=int)
-    K = np.zeros((ndof,ndof))
-    U = np.zeros((ndof,1)) 
-    for e in range(numelem):
-        u, Ke = DivOperator(nelx, nely, e)
-        temp[:,0] = LMu[:,e]
-        for i in range(neldof):
-            I = temp[i,0]
-            if I>-1:
-                U[I,0] = U[I,0] + u[i,0]
-
-    return U
-
-
-
-nelx = 1
-nely = 2
-
-ue, Ke = DivOperator(nelx, nely, 1)
-print(ue)
-print(Ke)
-Div = AssembleDivOperator(nelx, nely)
-print(Div)
-U = AssembleU(nelx, nely)
-print(U)
-const = Div @ U
-print(const)
-"""
-U = AssembleU(nelx, nely)
-print(U)
-
-Div = AssembleDivOperator(nelx, nely)
-print(Div)
-
-const = Div @ U
-print(const)
-"""
