@@ -1,5 +1,5 @@
 import unittest
-import FE_subroutines2 as FE
+import FEACSubroutines as FE
 import numpy as np
 import math
 
@@ -299,10 +299,7 @@ class TestDivNodalBasisUniform(unittest.TestCase):
 
         const = Dhat @ u
         self.assertAlmostEqual(const[0][0],2.0, None, None,1e-10)
-        print('======================')
-        print(Dhat)
-        print(u)
-        print('======================')
+
         # test with u = [-y,x] ==>div(u) = 0
         u = np.zeros((8,1))
         for i in range(8):
@@ -502,114 +499,6 @@ class TestConnectivity(unittest.TestCase):
                 for j in range(6):
                     self.assertEqual(IEN1e[i][j], IENe[i][j])
                     self.assertEqual(IEN1n[i][j], IENn[i][j])
-
-
-class TestGetID_LM(unittest.TestCase):
-
-    def testGetID_LM1(self):
-        ID1 = np.array([[ 0,  2,  4,  6,  8, 10, 12],
-                        [ 1,  3,  5,  7,  9, 11, 13]])
-        LM1 = np.array([[ 0,  2],
-                        [ 1,  3],
-                        [ 6,  8],
-                        [ 7,  9],
-                        [ 4,  6],
-                        [ 5,  7],
-                        [ 10, 12],
-                        [ 11, 13],
-                        [14, 15]]) 
-        ID, LM, LMu = FE.GetID_LM(2, 1)
-        for i in range(9):
-            for j in range(2):
-                self.assertEqual(LM[i][j], LM1[i][j])
-
-        for i in range(7):
-            for j in range(2):
-                self.assertEqual(ID[j][i],ID1[j][i])
-
-    def testGetID_LM2(self):
-        ID1 = np.array([[ 0,  2,  4,  6,  8, 10, 12],
-                        [ 1,  3,  5,  7,  9, 11, 13]])
-        LM1 = np.array([[ 0,  6],
-                        [ 1,  7],
-                        [ 4,  10],
-                        [ 5,  11],
-                        [ 2,  8],
-                        [ 3,  9],
-                        [ 6,  12],
-                        [ 7,  13],
-                        [14, 15]]) 
-        ID, LM, LMu = FE.GetID_LM(1, 2)
-        for i in range(9):
-            for j in range(2):
-                self.assertEqual(LM[i][j], LM1[i][j])
-
-        for i in range(7):
-            for j in range(2):
-                self.assertEqual(ID[j][i],ID1[j][i])
-
-    def testGetID_LM3(self):
-        ID1 = np.array([[ 0,  2,  4,  6,  8, 10, 12, 14, 16, 18, 20, 22],
-                        [ 1,  3,  5,  7,  9, 11, 13, 15, 17, 19, 21, 23]])
-        LM1 = np.array([[ 0,  2, 10, 12],
-                        [ 1,  3, 11, 13],
-                        [ 6,  8, 16, 18],
-                        [ 7,  9, 17, 19],
-                        [ 4,  6, 14, 16],
-                        [ 5,  7, 15, 17],
-                        [ 10, 12,20, 22],
-                        [ 11, 13,21, 23],
-                        [24, 25, 26, 27]]) 
-        ID, LM, LMu = FE.GetID_LM(2, 2)
-        for i in range(9):
-            for j in range(4):
-                self.assertEqual(LM[i][j], LM1[i][j])
-
-        for i in range(12):
-            for j in range(2):
-                self.assertEqual(ID[j][i],ID1[j][i])
-
-    def testGetID_LM4(self):
-        ID1 = np.array([[ 0,  2,  4,  6,  8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32],
-                        [ 1,  3,  5,  7,  9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33]])
-        LM1 = np.array([[ 0 , 2 , 4 , 14, 16, 18],
-                        [ 1 , 3 , 5 , 15, 17, 19],
-                        [ 8 , 10, 12, 22, 24, 26],
-                        [ 9 , 11, 13, 23, 25, 27],
-                        [ 6 , 8 , 10, 20, 22, 24],
-                        [ 7 , 9 , 11, 21, 23, 25],
-                        [ 14, 16, 18, 28, 30, 32],
-                        [ 15, 17, 19, 29, 31, 33],
-                        [ 34, 35, 36, 37, 38, 39]]) 
-        ID, LM, LMu = FE.GetID_LM(3, 2)
-        for i in range(9):
-            for j in range(6):
-                self.assertEqual(LM[i][j], LM1[i][j])
-
-        for i in range(17):
-            for j in range(2):
-                self.assertEqual(ID[j][i],ID1[j][i])
-
-
-class TestGetNodeCoord(unittest.TestCase):
-
-    def testGetNodeCoord(self):
-        xx = np.array([[0], [1], [0], [1]])
-        yy = np.array([[0], [0], [1], [1]])
-        x, y = FE.GetNodeCoord(1, 1)
-        # the output is x (4x1 array) and y (4x1 array)
-        for i in range(4):
-            self.assertEqual(x[i][0], xx[i][0])
-            self.assertEqual(y[i][0], yy[i][0])
-
-    def testGetNodeCoord2(self):
-        xx = np.array([[0], [0.5], [1], [0], [0.5], [1]])
-        yy = np.array([[0], [0], [0], [1], [1], [1]])
-        x, y = FE.GetNodeCoord(2, 1)
-        # the output is x (4x1 array) and y (4x1 array)
-        for i in range(6):
-            self.assertEqual(x[i][0], xx[i][0])
-            self.assertEqual(y[i][0], yy[i][0])
 
 
 def main():
