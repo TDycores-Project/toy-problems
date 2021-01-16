@@ -1,0 +1,620 @@
+import unittest
+import FE_subroutines2 as FE
+import numpy as np
+import math
+
+class TestPiolaTransformation(unittest.TestCase):
+
+    def test_Piola1(self):
+        """ Note 
+        2---3
+        |   |
+        0---1
+        """
+        coord_E = [[0.,0.],
+                   [1.,0.],
+                   [0.,1.],
+                   [1.,1.]]
+        Xhat = [-1,-1]
+        X, DF_E, J_E = FE.PiolaTransform(coord_E, Xhat)
+
+        self.assertEqual(X[0][0], coord_E[0][0])
+        self.assertEqual(X[1][0], coord_E[0][1])
+        self.assertEqual(J_E,0.25)
+        self.assertEqual(DF_E[0][0],0.5)
+        self.assertEqual(DF_E[0][1],0.)
+        self.assertEqual(DF_E[1][1],0.5)
+
+    def test_Piola2(self):
+        """ Note 
+        2---3
+        |   |
+        0---1
+        """
+        coord_E = [[0.,0.],
+                   [1.,0.],
+                   [0.,1.],
+                   [1.,1.]]
+        Xhat = [0., 0.]
+        X, DF_E, J_E = FE.PiolaTransform(coord_E, Xhat)
+
+        self.assertEqual(X[0][0], 0.5)
+        self.assertEqual(X[1][0], 0.5)
+        self.assertEqual(J_E,0.25)
+        self.assertEqual(DF_E[0][0],0.5)
+        self.assertEqual(DF_E[0][1],0.)
+        self.assertEqual(DF_E[1][1],0.5)
+
+
+class TestNormal(unittest.TestCase):
+
+    def test_Normal1(self):
+        # test on E = [0,0.5]^2
+        coord_E = [[0.0,0.0],
+                   [0.5,0.0],
+                   [0.0,0.5],
+                   [0.5,0.5]]
+        # check the left edge and (x,y) mapped from (xhat,yhat)
+        nl = [-1.,0.]
+        n, X = FE.GetNormal(coord_E,[-1. ,0.])
+        self.assertAlmostEqual(n[0],nl[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nl[1],None,None,1e-8)
+        self.assertAlmostEqual(X[1][0],0.25,None,None,1e-8)
+        # check the right edge and (x,y) mapped from (xhat,yhat)
+        nr = [1.,0]
+        n, X = FE.GetNormal(coord_E,[1. ,0.])
+        self.assertAlmostEqual(n[0],nr[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nr[1],None,None,1e-8)
+        self.assertAlmostEqual(X[0][0],0.5,None,None,1e-8)
+        # check the bottom edge and (x,y) mapped from (xhat,yhat)
+        nb = [0.,-1.]
+        n, X = FE.GetNormal(coord_E,[0 ,-1])
+        self.assertAlmostEqual(n[0],nb[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nb[1],None,None,1e-8)
+        self.assertAlmostEqual(X[0][0],0.25,None,None,1e-8)
+        # check the top edge and (x,y) mapped from (xhat,yhat)
+        nt = [0.,1.]
+        n, X = FE.GetNormal(coord_E,[0 ,1])
+        self.assertAlmostEqual(n[0],nt[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nt[1],None,None,1e-8)
+        self.assertAlmostEqual(X[1][0],0.5,None,None,1e-8)
+
+
+class TestNormal2(unittest.TestCase):
+    # test based on Fig 3.5 of Zhen Tao PhD thesis
+    def test_Normal2(self):
+        coord_E = [[0.,0.],
+                   [1.,0.],
+                   [0.25,0.5],
+                   [0.75,0.75]]
+        # check the left edge normal and middle point (x,y) mapped from (xhat,yhat)
+        nl = np.array([-2/math.sqrt(5), 1/math.sqrt(5)])
+        # enter the middle point (-1,,0) on the left edge of Ehat
+        n, X = FE.GetNormal(coord_E,[-1. ,0.])
+        self.assertAlmostEqual(n[0],nl[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nl[1],None,None,1e-8)
+        self.assertAlmostEqual(X[0][0],1/8,None,None,1e-8)
+
+        # check the right edge normal and middle point (x,y) mapped from (xhat,yhat)
+        nr = [3/math.sqrt(10),1/math.sqrt(10)]
+        # enter the middle point (1,0) on the right edge of Ehat
+        n, X = FE.GetNormal(coord_E,[1. ,0.])
+        self.assertAlmostEqual(n[0],nr[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nr[1],None,None,1e-8)
+        self.assertAlmostEqual(X[0][0],7/8,None,None,1e-8)
+
+        # check the bottom edge normal and middle point (x,y) mapped from (xhat,yhat)
+        nb = [0.,-1.]
+        # enter the middle point (0,-1) on the bottom edge of Ehat
+        n, X = FE.GetNormal(coord_E,[0 ,-1])
+        self.assertAlmostEqual(n[0],nb[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nb[1],None,None,1e-8)
+        self.assertAlmostEqual(X[0][0],0.5,None,None,1e-8)
+
+        # check the top edge normal and middle point (x,y) mapped from (xhat,yhat)
+        nt = [-1/math.sqrt(5),2/math.sqrt(5)]
+        # enter the middle point (0,1) on the top edge of Ehat
+        n, X = FE.GetNormal(coord_E,[0. ,1.])
+        self.assertAlmostEqual(n[0],nt[0],None,None,1e-8)
+        self.assertAlmostEqual(n[1],nt[1],None,None,1e-8)
+        self.assertAlmostEqual(X[1][0],0.625,None,None,1e-8)
+
+
+class TestNodalBasisUniform(unittest.TestCase):
+
+    #check Nhat, the Nodal basis on uniform mesh
+    def test_GetNodalBasis1(self):
+        """ element E 
+        2-------3    
+        |       |     
+        0-------1
+        """
+        coord_E = [[0.,0.],
+                   [1.,0.],
+                   [0.,0.25],
+                   [1.,0.25]]
+        nl, X = FE.GetNormal(coord_E, [-1., 0.])
+        nr, X = FE.GetNormal(coord_E, [1., 0.])
+        nb, X = FE.GetNormal(coord_E, [0., -1.])
+        nt, X = FE.GetNormal(coord_E, [0., 1.])
+        # check node 0,
+        Nhat = FE.GetACNodalBasis(coord_E,[-1,-1])
+        # Note: Nhat = [v0,v1,v2,v3,v4,v5,v6,v7]
+        # check v0.nb=1 and v4.nl=1
+        self.assertAlmostEqual(np.dot(Nhat[:,0],nb),1.0,None,None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,4],nl),1.0,None,None,1e-10)
+        # check other nodes
+        self.assertAlmostEqual(np.dot(Nhat[:,1],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,2],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,3],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,5],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,6],nt),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,7],nt),0.0, None, None,1e-10)
+
+        # check node 1,
+        Nhat = FE.GetACNodalBasis(coord_E,[1,-1])
+        # Note: Nhat = [v0,v1,v2,v3,v4,v5,v6,v7]
+        # check v1.nb=1 and v2.nr=1 
+        self.assertAlmostEqual(np.dot(Nhat[:,1],nb),1.0,None,None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,2],nr),1.0,None,None,1e-10)
+        # check other nodes
+        self.assertAlmostEqual(np.dot(Nhat[:,0],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,3],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,4],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,5],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,6],nt),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,7],nt),0.0, None, None,1e-10)
+
+        # check node 2,
+        Nhat = FE.GetACNodalBasis(coord_E,[-1,1])
+        # Note: Nhat = [v0,v1,v2,v3,v4,v5,v6,v7]
+        # check v5.nl=1 and v6.nt=1 
+        self.assertAlmostEqual(np.dot(Nhat[:,5],nl),1.0,None,None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,6],nt),1.0,None,None,1e-10)
+        # check other nodes 
+        self.assertAlmostEqual(np.dot(Nhat[:,0],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,1],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,2],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,3],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,4],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,7],nt),0.0, None, None,1e-10)
+
+        # check node 3,
+        Nhat = FE.GetACNodalBasis(coord_E,[1,1])
+        # Note: Nhat = [v0,v1,v2,v3,v4,v5,v6,v7]
+        # check v7.nt=1 and v3.nr=1 
+        self.assertAlmostEqual(np.dot(Nhat[:,7],nt),1.0,None,None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,3],nr),1.0,None,None,1e-10)
+        # check other nodes
+        self.assertAlmostEqual(np.dot(Nhat[:,0],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,1],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,2],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,4],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,5],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,6],nt),0.0, None, None,1e-10)
+
+
+class TestNodalBasisNonUniform(unittest.TestCase):
+
+    #check Nhat, the Nodal basis on uniform mesh
+    def test_GetNodalBasis2(self):
+        """ element E is taken from fig 3.5 of Zhen Tao PhD thesis
+                 3
+                  \
+           2       \ 
+          /         \
+         /           \
+        0-------------1
+        """
+        coord_E = [[0.,0.],
+                   [1.,0.],
+                   [0.25,0.5],
+                   [0.75,0.75]]
+        nl, X = FE.GetNormal(coord_E, [-1., 0.])
+        nr, X = FE.GetNormal(coord_E, [1., 0.])
+        nb, X = FE.GetNormal(coord_E, [0., -1.])
+        nt, X = FE.GetNormal(coord_E, [0., 1.])
+        # check node 0,
+        Nhat = FE.GetACNodalBasis(coord_E,[-1,-1])
+        # Note: Nhat = [v0,v1,v2,v3,v4,v5,v6,v7]
+        # check v0.nb=1 and v4.nl=1
+        self.assertAlmostEqual(np.dot(Nhat[:,0],nb),1.0,None,None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,4],nl),1.0,None,None,1e-10)
+        # check other nodes
+        self.assertAlmostEqual(np.dot(Nhat[:,1],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,2],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,3],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,5],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,6],nt),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,7],nt),0.0, None, None,1e-10)
+
+        # check node 1,
+        Nhat = FE.GetACNodalBasis(coord_E,[1,-1])
+        # Note: Nhat = [v0,v1,v2,v3,v4,v5,v6,v7]
+        # check v1.nb=1 and v2.nr=1 
+        self.assertAlmostEqual(np.dot(Nhat[:,1],nb),1.0,None,None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,2],nr),1.0,None,None,1e-10)
+        # check other nodes
+        self.assertAlmostEqual(np.dot(Nhat[:,0],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,3],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,4],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,5],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,6],nt),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,7],nt),0.0, None, None,1e-10)
+
+        # check node 2,
+        Nhat = FE.GetACNodalBasis(coord_E,[-1,1])
+        # Note: Nhat = [v0,v1,v2,v3,v4,v5,v6,v7]
+        # check v5.nl=1 and v6.nt=1 
+        self.assertAlmostEqual(np.dot(Nhat[:,5],nl),1.0,None,None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,6],nt),1.0,None,None,1e-10)
+        # check other nodes 
+        self.assertAlmostEqual(np.dot(Nhat[:,0],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,1],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,2],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,3],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,4],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,7],nt),0.0, None, None,1e-10)
+
+        # check node 3,
+        Nhat = FE.GetACNodalBasis(coord_E,[1,1])
+        # Note: Nhat = [v0,v1,v2,v3,v4,v5,v6,v7]
+        # check v7.nt=1 and v3.nr=1 
+        self.assertAlmostEqual(np.dot(Nhat[:,7],nt),1.0,None,None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,3],nr),1.0,None,None,1e-10)
+        # check other nodes
+        self.assertAlmostEqual(np.dot(Nhat[:,0],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,1],nb),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,2],nr),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,4],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,5],nl),0.0, None, None,1e-10)
+        self.assertAlmostEqual(np.dot(Nhat[:,6],nt),0.0, None, None,1e-10)
+
+
+class TestDivNodalBasisUniform(unittest.TestCase):
+
+    #check Dhat the divergence of Nodal basis on uniform mesh
+    def test_GetDivNodalBasis1(self):
+ 
+        coord_E = np.array([[0.0,0.5],
+                            [1.0,0.5],
+                            [0.0,1.0],
+                            [1.0,1.0]])
+        nl, X = FE.GetNormal(coord_E, [-1., 0.])
+        nr, X = FE.GetNormal(coord_E, [1., 0.])
+        nb, X = FE.GetNormal(coord_E, [0., -1.])
+        nt, X = FE.GetNormal(coord_E, [0., 1.])
+        Dhat = FE.GetDivACNodalBasis(coord_E)
+
+        normals = np.block([[nb],[nb],[nr],[nr],[nl],[nl],[nt],[nt]])
+        nodes = np.block([coord_E[0,:],coord_E[1,:],coord_E[1,:],coord_E[3,:],
+                          coord_E[0,:],coord_E[2,:],coord_E[2,:],coord_E[3,:]])
+
+        # test with u = [x-y,x+y] ==>div(u) = 2
+        u = np.zeros((8,1))
+        for i in range(8):
+            x = nodes[2*i]
+            y = nodes[2*i+1]
+            u[i][0] = np.dot([x-y,x+y],normals[i,:])
+
+        const = Dhat @ u
+        self.assertAlmostEqual(const[0][0],2.0, None, None,1e-10)
+        print('======================')
+        print(Dhat)
+        print(u)
+        print('======================')
+        # test with u = [-y,x] ==>div(u) = 0
+        u = np.zeros((8,1))
+        for i in range(8):
+            x = nodes[2*i]
+            y = nodes[2*i+1]
+            u[i][0] = np.dot([-y,x],normals[i,:])
+
+        const = Dhat @ u
+        self.assertAlmostEqual(const[0][0],0.0, None, None,1e-10)
+
+        # test with u = [-x,x] ==>div(u) = -1
+        u = np.zeros((8,1))
+        for i in range(8):
+            x = nodes[2*i]
+            y = nodes[2*i+1]
+            u[i][0] = np.dot([-x,x],normals[i,:])
+
+        const = Dhat @ u
+        self.assertAlmostEqual(const[0][0],-1.0, None, None,1e-10)
+
+
+class TestDivNodalBasisNonUniform(unittest.TestCase):
+
+    #check Dhat the divergence of Nodal basis on non-uniform mesh
+    def test_GetDivNodalBasis(self):
+        """ element E is taken from fig 3.5 of Zhen Tao PhD thesis
+                 3
+                  \
+           2       \ 
+          /         \
+         /           \
+        0-------------1
+        """
+        coord_E = np.array([[0.,0.],
+                            [1.,0.],
+                            [0.25,0.5],
+                            [0.75,0.75]])
+        nl, X = FE.GetNormal(coord_E, [-1., 0.])
+        nr, X = FE.GetNormal(coord_E, [1., 0.])
+        nb, X = FE.GetNormal(coord_E, [0., -1.])
+        nt, X = FE.GetNormal(coord_E, [0., 1.])
+        Dhat = FE.GetDivACNodalBasis(coord_E)
+
+        normals = np.block([[nb],[nb],[nr],[nr],[nl],[nl],[nt],[nt]])
+        nodes = np.block([coord_E[0,:],coord_E[1,:],coord_E[1,:],coord_E[3,:],
+                          coord_E[0,:],coord_E[2,:],coord_E[2,:],coord_E[3,:]])
+
+        # test with u = [x-y,x+y] ==>div(u) = 2
+        u = np.zeros((8,1))
+        for i in range(8):
+            x = nodes[2*i]
+            y = nodes[2*i+1]
+            u[i][0] = np.dot([x-y,x+y],normals[i,:])
+
+        const = Dhat @ u
+        self.assertAlmostEqual(const[0][0],2.0, None, None,1e-10)
+
+        # test with u = [-y,x] ==>div(u) = 0
+        u = np.zeros((8,1))
+        for i in range(8):
+            x = nodes[2*i]
+            y = nodes[2*i+1]
+            u[i][0] = np.dot([-y,x],normals[i,:])
+
+        const = Dhat @ u
+        self.assertAlmostEqual(const[0][0],0.0, None, None,1e-10)
+
+        # test with u = [-x,x] ==>div(u) = -1
+        u = np.zeros((8,1))
+        for i in range(8):
+            x = nodes[2*i]
+            y = nodes[2*i+1]
+            u[i][0] = np.dot([-x,x],normals[i,:])
+
+        const = Dhat @ u
+        self.assertAlmostEqual(const[0][0],-1.0, None, None,1e-10)
+
+
+class TestQuadrature(unittest.TestCase):
+
+    def test_GAUSS1(self):
+        delta = 1e-4
+        ww2 = [1., 1.]
+        qq2 = [-0.5774, 0.5774]
+        w, q = FE.GetQuadrature(2,'GAUSS')
+        for i in range(0,2):
+            self.assertAlmostEqual(ww2[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq2[i], q[i],None,None,delta)
+    
+    def test_GAUSS2(self):
+        delta = 1e-4
+        ww3 = [0.5556,  0.8889,  0.5556]
+        qq3 = [-0.7746,      0,  0.7746]
+        w, q = FE.GetQuadrature(3,'GAUSS')
+        for i in range(0,3):
+            self.assertAlmostEqual(ww3[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq3[i], q[i],None,None,delta)
+    def test_GAUSS3(self):
+        delta = 1e-4
+        ww5 = [0.2369,    0.4786,    0.5689,    0.4786,    0.2369]
+        qq5 = [-0.9062,   -0.5385,    0.0000,    0.5385,    0.9062]
+        w, q = FE.GetQuadrature(5,'GAUSS')
+        for i in range(0,5):
+            self.assertAlmostEqual(ww5[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq5[i], q[i],None,None,delta)
+    def test_LGL1(self):
+        delta = 1e-4
+        ww2 = [1., 1.]
+        qq2 = [-1., 1.]
+        w, q = FE.GetQuadrature(2,'LGL')
+        for i in range(0,2):
+            self.assertAlmostEqual(ww2[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq2[i], q[i],None,None,delta)
+    
+    def test_LGL2(self):
+        delta = 1e-4
+        ww3 = [0.3333,    1.3333,    0.3333]
+        qq3 = [-1.,      0,  1.]
+        w, q = FE.GetQuadrature(3,'LGL')
+        for i in range(0,3):
+            self.assertAlmostEqual(ww3[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq3[i], q[i],None,None,delta)
+    def test_LGL3(self):
+        delta = 1e-4
+        ww5 = [0.1000,    0.5444,    0.7111,    0.5444,    0.1000]
+        qq5 = [-1.0000,   -0.6547,         0,    0.6547,    1.0000]
+        w, q = FE.GetQuadrature(5,'LGL')
+        for i in range(0,5):
+            self.assertAlmostEqual(ww5[i], w[i],None,None,delta)
+            self.assertAlmostEqual(qq5[i], q[i],None,None,delta)
+
+
+class TestConnectivity(unittest.TestCase):
+
+    def test_connectivity1(self):
+        IEN1e = np.array([[0, 1],
+                          [3, 4],
+                          [2, 3],
+                          [5, 6]])
+        IEN1n = np.array([[0, 1],
+                          [1, 2],
+                          [3, 4],
+                          [4, 5]])
+
+        IENe, IENn = FE.GetConnectivity(2,1)
+        for i in range(4):
+            for j in range(2):
+                self.assertEqual(IEN1e[i][j], IENe[i][j])
+                self.assertEqual(IEN1n[i][j], IENn[i][j])
+
+    def test_connectivity2(self):
+        IEN1e = np.array([[0, 3],
+                          [2, 5],
+                          [1, 4],
+                          [3, 6]])
+        IEN1n = np.array([[0, 2],
+                          [1, 3],
+                          [2, 4],
+                          [3, 5]])
+
+        IENe, IENn = FE.GetConnectivity(1,2)
+        for i in range(4):
+            for j in range(2):
+                self.assertEqual(IEN1e[i][j], IENe[i][j])
+                self.assertEqual(IEN1n[i][j], IENn[i][j])
+
+    def test_connectivity3(self):
+            IEN1e = np.array([[0 , 1 , 5 , 6 ],
+                              [3 , 4 , 8 , 9 ],
+                              [2 , 3 , 7 , 8 ],
+                              [5 , 6 , 10, 11]])
+
+            IEN1n = np.array([[0 , 1 , 3 , 4 ],
+                              [1 , 2 , 4 , 5 ],
+                              [3 , 4 , 6 , 7 ],
+                              [4 , 5 , 7 , 8]])
+
+            IENe, IENn = FE.GetConnectivity(2,2)
+            for i in range(4):
+                for j in range(4):
+                    self.assertEqual(IEN1e[i][j], IENe[i][j])
+                    self.assertEqual(IEN1n[i][j], IENn[i][j])
+
+    def test_connectivity4(self):
+            IEN1e = np.array([[0, 1, 2, 7 , 8 , 9 ],
+                              [4, 5, 6, 11, 12, 13],
+                              [3, 4, 5, 10, 11, 12],
+                              [7, 8, 9, 14, 15, 16]])
+             
+            IEN1n = np.array([[0, 1, 2, 4 , 5 , 6 ],
+                              [1, 2, 3, 5 , 6 , 7 ],
+                              [4, 5, 6, 8 , 9 , 10],
+                              [5, 6, 7, 9 , 10, 11]])
+
+            IENe, IENn = FE.GetConnectivity(3,2)
+            for i in range(4):
+                for j in range(6):
+                    self.assertEqual(IEN1e[i][j], IENe[i][j])
+                    self.assertEqual(IEN1n[i][j], IENn[i][j])
+
+
+class TestGetID_LM(unittest.TestCase):
+
+    def testGetID_LM1(self):
+        ID1 = np.array([[ 0,  2,  4,  6,  8, 10, 12],
+                        [ 1,  3,  5,  7,  9, 11, 13]])
+        LM1 = np.array([[ 0,  2],
+                        [ 1,  3],
+                        [ 6,  8],
+                        [ 7,  9],
+                        [ 4,  6],
+                        [ 5,  7],
+                        [ 10, 12],
+                        [ 11, 13],
+                        [14, 15]]) 
+        ID, LM, LMu = FE.GetID_LM(2, 1)
+        for i in range(9):
+            for j in range(2):
+                self.assertEqual(LM[i][j], LM1[i][j])
+
+        for i in range(7):
+            for j in range(2):
+                self.assertEqual(ID[j][i],ID1[j][i])
+
+    def testGetID_LM2(self):
+        ID1 = np.array([[ 0,  2,  4,  6,  8, 10, 12],
+                        [ 1,  3,  5,  7,  9, 11, 13]])
+        LM1 = np.array([[ 0,  6],
+                        [ 1,  7],
+                        [ 4,  10],
+                        [ 5,  11],
+                        [ 2,  8],
+                        [ 3,  9],
+                        [ 6,  12],
+                        [ 7,  13],
+                        [14, 15]]) 
+        ID, LM, LMu = FE.GetID_LM(1, 2)
+        for i in range(9):
+            for j in range(2):
+                self.assertEqual(LM[i][j], LM1[i][j])
+
+        for i in range(7):
+            for j in range(2):
+                self.assertEqual(ID[j][i],ID1[j][i])
+
+    def testGetID_LM3(self):
+        ID1 = np.array([[ 0,  2,  4,  6,  8, 10, 12, 14, 16, 18, 20, 22],
+                        [ 1,  3,  5,  7,  9, 11, 13, 15, 17, 19, 21, 23]])
+        LM1 = np.array([[ 0,  2, 10, 12],
+                        [ 1,  3, 11, 13],
+                        [ 6,  8, 16, 18],
+                        [ 7,  9, 17, 19],
+                        [ 4,  6, 14, 16],
+                        [ 5,  7, 15, 17],
+                        [ 10, 12,20, 22],
+                        [ 11, 13,21, 23],
+                        [24, 25, 26, 27]]) 
+        ID, LM, LMu = FE.GetID_LM(2, 2)
+        for i in range(9):
+            for j in range(4):
+                self.assertEqual(LM[i][j], LM1[i][j])
+
+        for i in range(12):
+            for j in range(2):
+                self.assertEqual(ID[j][i],ID1[j][i])
+
+    def testGetID_LM4(self):
+        ID1 = np.array([[ 0,  2,  4,  6,  8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32],
+                        [ 1,  3,  5,  7,  9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33]])
+        LM1 = np.array([[ 0 , 2 , 4 , 14, 16, 18],
+                        [ 1 , 3 , 5 , 15, 17, 19],
+                        [ 8 , 10, 12, 22, 24, 26],
+                        [ 9 , 11, 13, 23, 25, 27],
+                        [ 6 , 8 , 10, 20, 22, 24],
+                        [ 7 , 9 , 11, 21, 23, 25],
+                        [ 14, 16, 18, 28, 30, 32],
+                        [ 15, 17, 19, 29, 31, 33],
+                        [ 34, 35, 36, 37, 38, 39]]) 
+        ID, LM, LMu = FE.GetID_LM(3, 2)
+        for i in range(9):
+            for j in range(6):
+                self.assertEqual(LM[i][j], LM1[i][j])
+
+        for i in range(17):
+            for j in range(2):
+                self.assertEqual(ID[j][i],ID1[j][i])
+
+
+class TestGetNodeCoord(unittest.TestCase):
+
+    def testGetNodeCoord(self):
+        xx = np.array([[0], [1], [0], [1]])
+        yy = np.array([[0], [0], [1], [1]])
+        x, y = FE.GetNodeCoord(1, 1)
+        # the output is x (4x1 array) and y (4x1 array)
+        for i in range(4):
+            self.assertEqual(x[i][0], xx[i][0])
+            self.assertEqual(y[i][0], yy[i][0])
+
+    def testGetNodeCoord2(self):
+        xx = np.array([[0], [0.5], [1], [0], [0.5], [1]])
+        yy = np.array([[0], [0], [0], [1], [1], [1]])
+        x, y = FE.GetNodeCoord(2, 1)
+        # the output is x (4x1 array) and y (4x1 array)
+        for i in range(6):
+            self.assertEqual(x[i][0], xx[i][0])
+            self.assertEqual(y[i][0], yy[i][0])
+
+
+def main():
+    unittest.main()
+
+
+if __name__ == '__main__':
+    main() 
