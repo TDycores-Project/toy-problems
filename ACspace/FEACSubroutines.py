@@ -489,6 +489,28 @@ def GetNodeCoord(mesh, nelx, nely):
 
     return x, y
 
+def plotmesh(mesh, nelx, nely):
+
+    # Creates space for a figure to be drawn
+    fig, ax = plt.subplots()
+    nen = 4
+    IENe, IENn = GetConnectivity(nelx, nely)
+    x , y = GetNodeCoord(mesh, nelx, nely)
+    numelem = nelx * nely
+    xx = np.zeros(nen + 1)
+    yy = np.zeros(nen + 1)
+    localnodes = [0, 1, 3, 2, 0]
+    for i in range(numelem):
+        for j in range(nen+1):
+            xx[j] = x[IENn[localnodes[j], i]]
+            yy[j] = y[IENn[localnodes[j], i]]
+
+        plt.fill(xx, yy, edgecolor='black', fill=False)
+
+    plt.title('Mesh distribution')
+    plt.show()
+
+    return
 
 def GetID(nelx, nely):
     """
@@ -744,5 +766,3 @@ def AssembleDivOperator(mesh, nelx, nely):
         U[edgedof[i],0] = U[edgedof[i],0]/2
 
     return U, D
-
-

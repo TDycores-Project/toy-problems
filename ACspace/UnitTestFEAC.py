@@ -569,12 +569,13 @@ class TestDivergenceUniform(unittest.TestCase):
 
     def test_Divergence4(self):
             nelx = 2
-            nely = 5
+            nely = 4
             U, D = FE.AssembleDivOperator('uniform', nelx, nely)
             Div = D @ U
             # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
             for i in range(len(Div)):
                 self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+    
 
 class TestDivergenceNonUniform(unittest.TestCase):
     """
