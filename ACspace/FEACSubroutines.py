@@ -469,18 +469,36 @@ def GetNodeCoord(mesh, nelx, nely):
     # Divide [0,1] by nodex (mesh in the x direction)
     x0 = np.linspace(0, 1, nodex)
     if mesh == 'uniform':
-        y0 = 0.0*x0 # the bottom geometry line              
+        y0 = 0.0*x0 # the bottom geometry line  
+
+        y = np.zeros((numnodes, 1))
+        for i in range(0, nodex):
+            # Divide [0,1] by nodey (mesh in the y direction)
+            y1 = np.linspace(y0[i], 1-0.2*x0[i], nodey)
+            for j in range(0, nodey):
+                y[i + j*nodex] = y1[j]   # collection of y
+
     elif mesh == 'nonuniform':
         y0 = 0.5*x0 # the bottom geometry line
-    else:
-        print("Enter 'unifrom' or 'nonuniform' ")
 
-    y = np.zeros((numnodes, 1))
-    for i in range(0, nodex):
-        # Divide [0,1] by nodey (mesh in the y direction)
-        y1 = np.linspace(y0[i], 1, nodey)
-        for j in range(0, nodey):
-            y[i + j*nodex] = y1[j]   # collection of y
+        y = np.zeros((numnodes, 1))
+        for i in range(0, nodex):
+            y1 = np.linspace(y0[i], 1-0.2*x0[i], nodey)
+            for j in range(0, nodey):
+                y[i + j*nodex] = y1[j]   # collection of y
+
+    elif mesh == 'stretched':
+        y0 = 0.5*x0 # the bottom geometry line
+
+        y = np.zeros((numnodes, 1))
+        for i in range(0, nodex):
+            y1 = np.linspace(y0[i], 0.2+0.45*x0[i], nodey)
+            for j in range(0, nodey):
+                y[i + j*nodex] = y1[j]   # collection of y
+
+    else:
+        print("Enter 'unifrom', 'nonuniform', or 'stretched' ")
+
 
     x = np.zeros((numnodes, 1))
     for i in range(0, nodey):
@@ -674,7 +692,7 @@ def GetVecUe(mesh, nelx, nely, e):
     for i in range(8):
         x = nodes[2*i]
         y = nodes[2*i+1]
-        u = [x-y, x+ y]
+        u = [x-y, x+y]
         ue[i][0] = np.dot(u,normals[i,:])
 
     return ue
