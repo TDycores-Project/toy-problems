@@ -501,6 +501,41 @@ class TestConnectivity(unittest.TestCase):
                     self.assertEqual(IEN1n[i][j], IENn[i][j])
 
 
+class TestGetSharedEdgeDof(unittest.TestCase):
+
+    def test_GetSharedEdgeDof1(self):
+        nelx = 5
+        nely = 1
+        edgedof1 = [12, 13, 14, 15, 16, 17, 18, 19]
+        edgedof = FE.GetSharedEdgeDof(nelx, nely)
+        for i in range(len(edgedof)):
+            self.assertEqual(edgedof[i], edgedof1[i])
+
+    def test_GetSharedEdgeDof2(self):
+        nelx = 2
+        nely = 4
+        edgedof1 = [6, 7, 10, 11, 12, 13, 16, 17, 20, 21, 22, 23, 26, 27, 30, 31, 32, 33, 36, 37]
+        edgedof = FE.GetSharedEdgeDof(nelx, nely)
+        for i in range(len(edgedof)):
+            self.assertEqual(edgedof[i], edgedof1[i])
+
+    def test_GetSharedEdgeDof3(self):
+        nelx = 2
+        nely = 2
+        edgedof1 = [6, 7, 10, 11, 12, 13, 16, 17]
+        edgedof = FE.GetSharedEdgeDof(nelx, nely)
+        for i in range(len(edgedof)):
+            self.assertEqual(edgedof[i], edgedof1[i])
+
+    def test_GetSharedEdgeDof4(self):
+        nelx = 3
+        nely = 2
+        edgedof1 = [8, 9, 10, 11, 14, 15, 16, 17, 18, 19, 22, 23, 24, 25]
+        edgedof = FE.GetSharedEdgeDof(nelx, nely)
+        for i in range(len(edgedof)):
+            self.assertEqual(edgedof[i], edgedof1[i])
+
+
 def main():
     unittest.main()
 
