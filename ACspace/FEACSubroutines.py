@@ -466,6 +466,14 @@ def GetNodeCoord(mesh, nelx, nely):
     nodey = nely + 1
     numnodes = nodex*nodey
     
+    interiornodex = nelx - 1
+    interiornodey = nely - 1
+    interiornodes = interiornodex*interiornodey
+
+    hx = 1/nelx
+    hy = 1/nely
+    h = max([hx, hy])
+
     # Divide [0,1] by nodex (mesh in the x direction)
     x0 = np.linspace(0, 1, nodex)
     if mesh == 'uniform':
@@ -474,7 +482,7 @@ def GetNodeCoord(mesh, nelx, nely):
         y = np.zeros((numnodes, 1))
         for i in range(0, nodex):
             # Divide [0,1] by nodey (mesh in the y direction)
-            y1 = np.linspace(y0[i], 1-0.2*x0[i], nodey)
+            y1 = np.linspace(y0[i], 1, nodey)
             for j in range(0, nodey):
                 y[i + j*nodex] = y1[j]   # collection of y
 
@@ -496,8 +504,30 @@ def GetNodeCoord(mesh, nelx, nely):
             for j in range(0, nodey):
                 y[i + j*nodex] = y1[j]   # collection of y
 
+    elif mesh == 'random':
+        y0 = 0.0*x0 # the bottom geometry line  
+
+        y = np.zeros((numnodes, 1))
+        for i in range(0, nodex):
+            # Divide [0,1] by nodey (mesh in the y direction)
+            y1 = np.linspace(y0[i], 1, nodey)
+            for j in range(0, nodey):
+                y[i + j*nodex] = y1[j]   # collection of y
+        
+        x = np.zeros((numnodes, 1))
+        for i in range(0, nodey):
+            for j in range(0, nodex):
+                x[j + i*nodex] = x0[j]   # collection of x
+        
+        np.random.seed(1)
+        randnodes = np.random.rand(interiornodes)*h/2 -h/4
+        for i in range(0,interiornodey):
+            for j in range(0,interiornodex):
+                x[(i+1)*(nodex) + j+1][0] = x[(i+1)*(nodex) + j+1][0] - randnodes[j+i*interiornodex]
+                y[(i+1)*(nodex) + j+1][0] = y[(i+1)*(nodex) + j+1][0] - randnodes[j+i*interiornodex]
+
     else:
-        print("Enter 'unifrom', 'nonuniform', or 'stretched' ")
+        print("Enter one of the mesh option: 'unifrom', 'nonuniform', 'stretched', 'random' ")
 
 
     x = np.zeros((numnodes, 1))
@@ -784,3 +814,4 @@ def AssembleDivOperator(mesh, nelx, nely):
         U[edgedof[i],0] = U[edgedof[i],0]/2
 
     return U, D
+
