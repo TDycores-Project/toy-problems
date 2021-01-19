@@ -737,14 +737,10 @@ def AssembleDivOperator(mesh, nelx, nely):
         D[e,:] = De @ L
 
     # divide those repeated dof by 2 in shared edges
-    edge = GetSharedEdgeDof(nelx, nely)
-    for i in range(len(edge)):
-        U[edge[i],0] = U[edge[i],0]/2
+    edgedof = GetSharedEdgeDof(nelx, nely)
+    for i in range(len(edgedof)):
+        U[edgedof[i],0] = U[edgedof[i],0]/2
 
     return U, D
 
-nelx = 4
-nely = 2
-U, D = Assembly('uniform', nelx, nely)
-print(D @ U)
 
