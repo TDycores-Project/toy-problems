@@ -431,40 +431,7 @@ def GetConnectivity(nelx, nely):
 
     return IENe, IENn
 
-def GetID_LM(nelx, nely):
-
-    nodex = nelx + 1
-    nodey = nely + 1
-    numnodes = nodex*nodey
-    numelem = nelx*nely
-    numedges = (nodex*nely) + (nodey*nelx)
-    ndof_u = 8
-    ID = np.zeros((2,numedges), dtype=int)
-    for i in range(0,numedges):
-        for j in range(0,2):
-            ID[j][i] = 2*i + j
-
-    IENe, IENn = GetConnectivity(nelx, nely)
-    LMu = np.zeros((ndof_u,numelem), dtype=int)
-    for i in range(0,numelem):
-        for j in range(0,4):
-            idd1 = ID[0][IENe[j][i]]
-            idd2 = ID[1][IENe[j][i]]
-            LMu[2*j][i] = idd1
-            LMu[2*j+1][i] = idd2
-
-    # add pressure dof to LM
-    ndof_p = 1
-    maxLMu = np.amax(LMu)
-    LMp = np.zeros((ndof_p,numelem), dtype=int)
-    for i in range(0,numelem):
-        LMp[0][i] = maxLMu + i + 1
-
-    LM = np.block([[LMu],[LMp]])
-
-    return ID, LM, LMu
-
-def GetNodeCoord(nelx, nely):
+def GetNodeCoord(nelx, nely, b):
     """ This function returns the physical coordinates of the nodes.
     Input:
     ------
@@ -472,6 +439,8 @@ def GetNodeCoord(nelx, nely):
             number of elements in the x direction.
     nely:   integer
             number of elements in the y direction.
+    b:      coefficient for the bottom line geometry yb = b*x
+    for example b = 0 gives the horizontal line form x=0 to x=1
     Output:
     -------
     x:      float (1d array)
@@ -499,7 +468,7 @@ def GetNodeCoord(nelx, nely):
     
     # Divide [0,1] by nodex (mesh in the x direction)
     x0 = np.linspace(0, 1, nodex)
-    y0 = 0.0 * x0**2               # the bottom geometry line
+    y0 = b * x0              # the bottom geometry line
 
     y = np.zeros((numnodes, 1))
     for i in range(0, nodex):
@@ -515,37 +484,234 @@ def GetNodeCoord(nelx, nely):
 
     return x, y
 
-def DivOperator(nelx, nely, e):
+
+def GetID(nelx, nely):
     """
-    This function is for testing divergence operator for multiple elements
+    This function returns an array of global dof of size (2,numedges)
+    each edge has 2 dof
+    """
+
+    nodex = nelx + 1
+    nodey = nely + 1
+    numelem = nelx*nely
+    numedges = (nodex*nely) + (nodey*nelx)
+    ID = np.zeros((2,numedges), dtype=int)
+    for i in range(0,numedges):
+        for j in range(0,2):
+            ID[j][i] = 2*i + j
+
+    return ID
+
+
+def GetLMu(nelx, nely):
+
+    numelem = nelx*nely
+    ndof_u = 8
+
+    ID = GetID(nelx, nely)
+    IENe, IENn = GetConnectivity(nelx, nely)
+
+    LMu = np.zeros((ndof_u,numelem), dtype=int)
+    for i in range(0,numelem):
+        for j in range(0,4):
+            idd1 = ID[0][IENe[j][i]]
+            idd2 = ID[1][IENe[j][i]]
+            LMu[2*j][i] = idd1
+            LMu[2*j+1][i] = idd2
+
+    return LMu
+
+def GetLMp(nelx, nely):
+
+    # add pressure dof to LM
+    LMu = GetLMu(nelx, nely)
+    maxLMu = np.amax(LMu)
+    ndof_p = 1
+    numelem = nelx*nely
+    LMp = np.zeros((ndof_p,numelem), dtype=int)
+    for i in range(0,numelem):
+        LMp[0][i] = maxLMu + i + 1
+
+    return LMp
+
+def GetCoordElem(nelx, nely, e):
+
+    IENe, IENn = GetConnectivity(nelx, nely)
+    x , y = GetNodeCoord(nelx, nely)
+    # get coordinate of the element
+    ce = np.zeros((4,1), dtype=int)
+    CoordElem = np.zeros((4,2))
+    for i in range(4):
+        ce[i][0] = IENn[i][e]
+        CoordElem[i][0] = x[ce[i,0]][0]
+        CoordElem[i][1] = y[ce[i,0]][0]
+
+    return CoordElem
+
+
+def GetGlobalNormal(nelx, nely, e):
+    """
+    ----3----
+    |       |
+    2       1
+    |       |
+    ----0----
+
+    2-------3
+    |       |
+    |       |
+    |       |
+    0-------1
     """
     IENe, IENn = GetConnectivity(nelx, nely)
     x , y = GetNodeCoord(nelx, nely)
     # get coordinate of the element
     ce = np.zeros((4,1), dtype=int)
-    coord_E = np.zeros((4,2))
     for i in range(4):
         ce[i][0] = IENn[i][e]
-        coord_E[i][0] = x[ce[i,0]][0]
-        coord_E[i][1] = y[ce[i,0]][0]
+    
+    x0 = x[ce[0,0]][0]
+    x1 = x[ce[1,0]][0]
+    x2 = x[ce[2,0]][0]
+    x3 = x[ce[3,0]][0]
+    y0 = y[ce[0,0]][0]
+    y1 = y[ce[1,0]][0]
+    y2 = y[ce[2,0]][0]
+    y3 = y[ce[3,0]][0]
 
-    nl, X = GetNormal(coord_E, [-1., 0.])
-    nr, X = GetNormal(coord_E, [1., 0.])
-    nb, X = GetNormal(coord_E, [0., -1.])
-    nt, X = GetNormal(coord_E, [0., 1.])
-    Dhat = GetDivACNodalBasis(coord_E)
+    # Get Tangential direction form node i to j, i< j as + direction
+    Tb = np.array([x1 - x0, y1 - y0])
+    Lb = math.sqrt(Tb[0]**2 + Tb[1]**2)
+    Tb = Tb/Lb
+    Tr = np.array([x3 - x1, y3 - y1])
+    Lr = math.sqrt(Tr[0]**2 + Tr[1]**2)
+    Tr = Tr/Lr
+    Tl = np.array([x2 - x0, y2 - y0])
+    Ll = math.sqrt(Tl[0]**2 + Tl[1]**2)
+    Tl = Tl/Ll
+    Tt = np.array([x3 - x2, y3 - y2])
+    Lt = math.sqrt(Tt[0]**2 + Tt[1]**2)
+    Tt = Tt/Lt
+
+    k = np.array([0, 0, 1])
+    nb = np.cross(Tb, k)
+    Nb = np.array([nb[0], nb[1]])
+    nr = np.cross(Tr, k)
+    Nr = np.array([nr[0], nr[1]])
+    nl = np.cross(Tl, k)
+    Nl = np.array([nl[0], nl[1]])
+    nt = np.cross(Tt, k)
+    Nt = np.array([nt[0], nt[1]])
+
+    return Nb, Nr, Nl, Nt
+
+def GetDivElem(nelx, nely, e):
+    """
+    This function is for testing divergence operator for multiple elements
+    """
+    CoordElem = GetCoordElem(nelx, nely, e)
+    De = GetDivACNodalBasis(CoordElem)
+
+    return De
+
+
+def GetVecUe(nelx, nely, e):
+    """
+    This function is for testing divergence operator for multiple elements
+    """
+    CoordElem = GetCoordElem(nelx, nely, e)
+
+    nl, X = GetNormal(CoordElem, [-1., 0.])
+    nr, X = GetNormal(CoordElem, [1., 0.])
+    nb, X = GetNormal(CoordElem, [0., -1.])
+    nt, X = GetNormal(CoordElem, [0., 1.])
 
     normals = np.block([[nb],[nb],[nr],[nr],[nl],[nl],[nt],[nt]])
-    nodes = np.block([coord_E[0,:],coord_E[1,:],coord_E[1,:],coord_E[3,:],
-                      coord_E[0,:],coord_E[2,:],coord_E[2,:],coord_E[3,:]])
+    nodes = np.block([CoordElem[0,:],CoordElem[1,:],CoordElem[1,:],CoordElem[3,:],
+                      CoordElem[0,:],CoordElem[2,:],CoordElem[2,:],CoordElem[3,:]])
+
     # test with u = [x-y,x+y] ==>div(u) = 2
     ue = np.zeros((8,1))
     for i in range(8):
         x = nodes[2*i]
         y = nodes[2*i+1]
-        ue[i][0] = np.dot([x-y,x+y],normals[i,:])
+        ue[i][0] = np.dot([2*x-y,x+y],normals[i,:])
 
-    Me = np.zeros((8,8))
-    Ke = np.block([[Me,Dhat.T],[Dhat,0]])
+    return ue
 
-    return ue, Ke
+def GetElementRestriction(nelx, nely, e):
+
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    neldof = 8
+    temp = np.zeros((neldof,1),dtype=int)
+    
+    # This is the normal of global dof
+    Nb, Nr, Nl, Nt = GetGlobalNormal(nelx, nely, e)
+    CoordElem = GetCoordElem(nelx, nely, e)
+    # This is the normal of local dof
+    nl, X = GetNormal(CoordElem, [-1., 0.])
+    nr, X = GetNormal(CoordElem, [1., 0.])
+    nb, X = GetNormal(CoordElem, [0., -1.])
+    nt, X = GetNormal(CoordElem, [0., 1.])
+    Loc2Globnormal = np.array([np.dot(nb,Nb), np.dot(nb,Nb), np.dot(nr,Nr), np.dot(nr,Nr),
+                               np.dot(nl,Nl), np.dot(nl,Nl), np.dot(nt,Nt), np.dot(nt,Nt)])
+    temp[:,0] = LMu[:,e]
+    # element restriction operator
+    L = np.zeros((neldof,ndof))
+    for i in range(neldof):
+        if Loc2Globnormal[i] >0:
+            L[i][temp[i][0]] = 1
+        else:
+            L[i][temp[i][0]] = -1
+
+    return L 
+
+def GetSharedEdgeDof(nelx, nely):
+
+    LMu = GetLMu(nelx, nely)
+    numelem = nelx*nely
+    neldof = 8
+    sharededge1=[]
+    for e1 in range(0,numelem):
+        for e2 in range(1,numelem):
+            for j in range(neldof):
+                for i in range(neldof):
+                    if LMu[j][e1]==LMu[i][e2] and e1 != e2:
+                        sharededge1.append(LMu[j][e1])
+                        
+    sharededge2 = [] 
+    [sharededge2.append(x) for x in sharededge1 if x not in sharededge2] 
+    idx = np.argsort(sharededge2)
+    sharededge = []
+    for i in range(0,len(sharededge2)):
+        sharededge.append(sharededge2[idx[i]])
+
+    return sharededge
+
+def Assembly(nelx, nely):
+
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    U = np.zeros((ndof, 1))
+    D = np.zeros((numelem, ndof))
+    for e in range(numelem):
+        L = GetElementRestriction(nelx, nely, e)
+        Ue = GetVecUe(nelx, nely, e)
+        De = GetDivElem(nelx, nely, e)
+
+        U = U + L.T @ Ue
+        D[e,:] = De @ L
+
+    edge = GetSharedEdgeDof(nelx, nely)
+    for i in range(len(edge)):
+        U[edge[i],0] = U[edge[i],0]/2
+
+    return U, D
+
+nelx = 4
+nely = 2
+U, D = Assembly(nelx, nely)
+print(D @ U)
+
