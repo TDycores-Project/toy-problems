@@ -431,7 +431,7 @@ def GetConnectivity(nelx, nely):
 
     return IENe, IENn
 
-def GetNodeCoord(nelx, nely, b):
+def GetNodeCoord(mesh, nelx, nely):
     """ This function returns the physical coordinates of the nodes.
     Input:
     ------
@@ -439,8 +439,8 @@ def GetNodeCoord(nelx, nely, b):
             number of elements in the x direction.
     nely:   integer
             number of elements in the y direction.
-    b:      coefficient for the bottom line geometry yb = b*x
-    for example b = 0 gives the horizontal line form x=0 to x=1
+    mesh: can be unifrom or nonuniform
+
     Output:
     -------
     x:      float (1d array)
@@ -468,7 +468,10 @@ def GetNodeCoord(nelx, nely, b):
     
     # Divide [0,1] by nodex (mesh in the x direction)
     x0 = np.linspace(0, 1, nodex)
-    y0 = b * x0              # the bottom geometry line
+    if mesh == 'uniform':
+        y0 = 0.0 * x0              # the bottom geometry line
+    else:
+        y0 = 0.5 * x0
 
     y = np.zeros((numnodes, 1))
     for i in range(0, nodex):
@@ -493,7 +496,6 @@ def GetID(nelx, nely):
 
     nodex = nelx + 1
     nodey = nely + 1
-    numelem = nelx*nely
     numedges = (nodex*nely) + (nodey*nelx)
     ID = np.zeros((2,numedges), dtype=int)
     for i in range(0,numedges):
@@ -525,7 +527,9 @@ def GetLMu(nelx, nely):
     return LMu
 
 def GetLMp(nelx, nely):
-
+    """
+    This is LMp for pressure, maybe not needed
+    """
     # add pressure dof to LM
     LMu = GetLMu(nelx, nely)
     maxLMu = np.amax(LMu)
@@ -537,10 +541,12 @@ def GetLMp(nelx, nely):
 
     return LMp
 
-def GetCoordElem(nelx, nely, e):
-
+def GetCoordElem(mesh, nelx, nely, e):
+    """
+    This functions returns coordinate of element "e" 
+    """
     IENe, IENn = GetConnectivity(nelx, nely)
-    x , y = GetNodeCoord(nelx, nely)
+    x , y = GetNodeCoord(mesh, nelx, nely)
     # get coordinate of the element
     ce = np.zeros((4,1), dtype=int)
     CoordElem = np.zeros((4,2))
@@ -552,8 +558,13 @@ def GetCoordElem(nelx, nely, e):
     return CoordElem
 
 
-def GetGlobalNormal(nelx, nely, e):
+def GetGlobalNormal(mesh, nelx, nely, e):
     """
+    This function returns the global dof normals.
+    Note that the local dof directions are outward.
+    Then we compare the global dof direction and
+    local dof direction for assembly later
+
     ----3----
     |       |
     2       1
@@ -567,7 +578,7 @@ def GetGlobalNormal(nelx, nely, e):
     0-------1
     """
     IENe, IENn = GetConnectivity(nelx, nely)
-    x , y = GetNodeCoord(nelx, nely)
+    x , y = GetNodeCoord(mesh, nelx, nely)
     # get coordinate of the element
     ce = np.zeros((4,1), dtype=int)
     for i in range(4):
@@ -608,21 +619,22 @@ def GetGlobalNormal(nelx, nely, e):
 
     return Nb, Nr, Nl, Nt
 
-def GetDivElem(nelx, nely, e):
+def GetDivElem(mesh, nelx, nely, e):
     """
-    This function is for testing divergence operator for multiple elements
+    This function returns the divergence operator for each element
+    We need it to test assembly 
     """
-    CoordElem = GetCoordElem(nelx, nely, e)
+    CoordElem = GetCoordElem(mesh, nelx, nely, e)
     De = GetDivACNodalBasis(CoordElem)
 
     return De
 
 
-def GetVecUe(nelx, nely, e):
+def GetVecUe(mesh, nelx, nely, e):
     """
-    This function is for testing divergence operator for multiple elements
+    This function discretize the vector u = [x-y, x+y] on element e
     """
-    CoordElem = GetCoordElem(nelx, nely, e)
+    CoordElem = GetCoordElem(mesh, nelx, nely, e)
 
     nl, X = GetNormal(CoordElem, [-1., 0.])
     nr, X = GetNormal(CoordElem, [1., 0.])
@@ -638,20 +650,25 @@ def GetVecUe(nelx, nely, e):
     for i in range(8):
         x = nodes[2*i]
         y = nodes[2*i+1]
-        ue[i][0] = np.dot([2*x-y,x+y],normals[i,:])
+        u = [x-y, x+ y]
+        ue[i][0] = np.dot(u,normals[i,:])
 
     return ue
 
-def GetElementRestriction(nelx, nely, e):
-
+def GetElementRestriction(mesh, nelx, nely, e):
+    """
+    This function is map between local to global dof or element restriction operator.
+    We use this function to scatter the local vector or matrix
+    to global vector or matrix in assembly process
+    """
     LMu = GetLMu(nelx, nely)
     ndof = np.amax(LMu) + 1
     neldof = 8
     temp = np.zeros((neldof,1),dtype=int)
     
     # This is the normal of global dof
-    Nb, Nr, Nl, Nt = GetGlobalNormal(nelx, nely, e)
-    CoordElem = GetCoordElem(nelx, nely, e)
+    Nb, Nr, Nl, Nt = GetGlobalNormal(mesh, nelx, nely, e)
+    CoordElem = GetCoordElem(mesh, nelx, nely, e)
     # This is the normal of local dof
     nl, X = GetNormal(CoordElem, [-1., 0.])
     nr, X = GetNormal(CoordElem, [1., 0.])
@@ -664,17 +681,24 @@ def GetElementRestriction(nelx, nely, e):
     L = np.zeros((neldof,ndof))
     for i in range(neldof):
         if Loc2Globnormal[i] >0:
+            # local dof and global dof are in same direction
             L[i][temp[i][0]] = 1
         else:
+            # local dof and global dof are in opposite direction
             L[i][temp[i][0]] = -1
 
     return L 
 
 def GetSharedEdgeDof(nelx, nely):
-
+    """
+    This function returns the global dof on shared edge.
+    In assembly when we add dof in shared edges, we need to divide it by 2, to avoid
+    counting a vector dof twice.
+    """
     LMu = GetLMu(nelx, nely)
     numelem = nelx*nely
     neldof = 8
+    # get all shared edges
     sharededge1=[]
     for e1 in range(0,numelem):
         for e2 in range(1,numelem):
@@ -682,17 +706,18 @@ def GetSharedEdgeDof(nelx, nely):
                 for i in range(neldof):
                     if LMu[j][e1]==LMu[i][e2] and e1 != e2:
                         sharededge1.append(LMu[j][e1])
-                        
+    # delete the possible repeated dof           
     sharededge2 = [] 
     [sharededge2.append(x) for x in sharededge1 if x not in sharededge2] 
     idx = np.argsort(sharededge2)
+    # sort shared global dof
     sharededge = []
     for i in range(0,len(sharededge2)):
         sharededge.append(sharededge2[idx[i]])
 
     return sharededge
 
-def Assembly(nelx, nely):
+def AssembleDivOperator(mesh, nelx, nely):
 
     numelem = nelx*nely
     LMu = GetLMu(nelx, nely)
@@ -700,13 +725,18 @@ def Assembly(nelx, nely):
     U = np.zeros((ndof, 1))
     D = np.zeros((numelem, ndof))
     for e in range(numelem):
-        L = GetElementRestriction(nelx, nely, e)
-        Ue = GetVecUe(nelx, nely, e)
-        De = GetDivElem(nelx, nely, e)
-
+        # get element restriction operator L for element e
+        L = GetElementRestriction(mesh, nelx, nely, e)
+        # get discretized vector u for element e
+        Ue = GetVecUe(mesh, nelx, nely, e)
+        # get divergence for element e
+        De = GetDivElem(mesh, nelx, nely, e)
+        # assemble U
         U = U + L.T @ Ue
+        # assemble Divergence
         D[e,:] = De @ L
 
+    # divide those repeated dof by 2 in shared edges
     edge = GetSharedEdgeDof(nelx, nely)
     for i in range(len(edge)):
         U[edge[i],0] = U[edge[i],0]/2
@@ -715,6 +745,6 @@ def Assembly(nelx, nely):
 
 nelx = 4
 nely = 2
-U, D = Assembly(nelx, nely)
+U, D = Assembly('uniform', nelx, nely)
 print(D @ U)
 
