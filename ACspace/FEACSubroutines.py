@@ -470,8 +470,10 @@ def GetNodeCoord(mesh, nelx, nely):
     x0 = np.linspace(0, 1, nodex)
     if mesh == 'uniform':
         y0 = 0.0 * x0              # the bottom geometry line
-    else:
+    elif mesh == 'nonunifrom':
         y0 = 0.5 * x0
+    else:
+        print("Enter 'unifrom' or 'nonuniform' ")
 
     y = np.zeros((numnodes, 1))
     for i in range(0, nodex):
