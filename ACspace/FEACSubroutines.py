@@ -504,6 +504,9 @@ def GetID(nelx, nely):
 
 
 def GetLMu(nelx, nely):
+    """
+    This function is LM for velocity created based on ID arrany and connectivity
+    """
 
     numelem = nelx*nely
     ndof_u = 8
