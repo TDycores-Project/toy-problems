@@ -469,9 +469,9 @@ def GetNodeCoord(mesh, nelx, nely):
     # Divide [0,1] by nodex (mesh in the x direction)
     x0 = np.linspace(0, 1, nodex)
     if mesh == 'uniform':
-        y0 = 0.0 * x0              # the bottom geometry line
-    elif mesh == 'nonunifrom':
-        y0 = 0.5 * x0
+        y0 = 0.0*x0 # the bottom geometry line              
+    elif mesh == 'nonuniform':
+        y0 = 0.5*x0 # the bottom geometry line
     else:
         print("Enter 'unifrom' or 'nonuniform' ")
 
