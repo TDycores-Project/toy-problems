@@ -545,36 +545,40 @@ class TestDivergenceUniform(unittest.TestCase):
         nely = 1
         U, D = FE.AssembleDivOperator('uniform', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence2(self):
         nelx = 3
         nely = 2
         U, D = FE.AssembleDivOperator('uniform', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence3(self):
         nelx = 2
         nely = 2
         U, D = FE.AssembleDivOperator('uniform', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence4(self):
         nelx = 2
         nely = 4
         U, D = FE.AssembleDivOperator('uniform', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
     
 
 class TestDivergenceNonUniform(unittest.TestCase):
@@ -586,36 +590,40 @@ class TestDivergenceNonUniform(unittest.TestCase):
         nely = 1
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence2(self):
         nelx = 3
         nely = 2
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence3(self):
         nelx = 3
         nely = 3
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence4(self):
         nelx = 2
         nely = 5
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
 
 class TestDivergenceStretched(unittest.TestCase):
@@ -627,36 +635,40 @@ class TestDivergenceStretched(unittest.TestCase):
         nely = 1
         U, D = FE.AssembleDivOperator('stretched', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence2(self):
         nelx = 3
         nely = 2
         U, D = FE.AssembleDivOperator('stretched', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence3(self):
         nelx = 3
         nely = 3
         U, D = FE.AssembleDivOperator('stretched', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence4(self):
         nelx = 2
         nely = 5
         U, D = FE.AssembleDivOperator('stretched', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
 
 class TestDivergenceRandom(unittest.TestCase):
@@ -669,9 +681,10 @@ class TestDivergenceRandom(unittest.TestCase):
         #FE.plotmesh('random', nelx, nely)
         U, D = FE.AssembleDivOperator('random', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence2(self):
         nelx = 3
@@ -679,9 +692,10 @@ class TestDivergenceRandom(unittest.TestCase):
         #FE.plotmesh('random', nelx, nely)
         U, D = FE.AssembleDivOperator('random', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence3(self):
         nelx = 4
@@ -689,9 +703,10 @@ class TestDivergenceRandom(unittest.TestCase):
         #FE.plotmesh('random', nelx, nely)
         U, D = FE.AssembleDivOperator('random', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence4(self):
         nelx = 3
@@ -699,9 +714,10 @@ class TestDivergenceRandom(unittest.TestCase):
         #FE.plotmesh('random', nelx, nely)
         U, D = FE.AssembleDivOperator('random', nelx, nely)
         Div = D @ U
+        d = FE.div_u()
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
-            self.assertAlmostEqual(Div[i][0], 2., None, None, 1e-10)
+            self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
 
 def main():

@@ -727,6 +727,7 @@ def GetVecUe(mesh, nelx, nely, e):
                       CoordElem[0,:],CoordElem[2,:],CoordElem[2,:],CoordElem[3,:]])
 
     # test with u = [x-y,x+y] ==>div(u) = 2
+    # you can test with different u
     ue = np.zeros((8,1))
     for i in range(8):
         x = nodes[2*i]
@@ -735,6 +736,12 @@ def GetVecUe(mesh, nelx, nely, e):
         ue[i][0] = np.dot(u,normals[i,:])
 
     return ue
+
+def div_u():
+    # this is the div(u), to make unit test easier
+    # change u above and div(u) here then run unit test to make
+    # sure divergence operator works for different u
+    return 2.
 
 def GetElementRestriction(mesh, nelx, nely, e):
     """
