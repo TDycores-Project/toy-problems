@@ -738,9 +738,9 @@ def GetVecUe(mesh, nelx, nely, e):
     return ue
 
 def div_u():
-    # this is the div(u), to make unit test easier
-    # change u above and div(u) here then run unit test to make
-    # sure divergence operator works for different u
+    # this is the div(u), for unit test
+    # if you changed u above update div(u) here
+    # then run unit test
     return 2.
 
 def GetElementRestriction(mesh, nelx, nely, e):
