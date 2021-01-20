@@ -486,6 +486,11 @@ def GetNodeCoord(mesh, nelx, nely):
             for j in range(0, nodey):
                 y[i + j*nodex] = y1[j]   # collection of y
 
+        x = np.zeros((numnodes, 1))
+        for i in range(0, nodey):
+            for j in range(0, nodex):
+                x[j + i*nodex] = x0[j]   # collection of x
+
     elif mesh == 'nonuniform':
         y0 = 0.5*x0 # the bottom geometry line
 
@@ -495,6 +500,11 @@ def GetNodeCoord(mesh, nelx, nely):
             for j in range(0, nodey):
                 y[i + j*nodex] = y1[j]   # collection of y
 
+        x = np.zeros((numnodes, 1))
+        for i in range(0, nodey):
+            for j in range(0, nodex):
+                x[j + i*nodex] = x0[j]   # collection of x
+
     elif mesh == 'stretched':
         y0 = 0.5*x0 # the bottom geometry line
 
@@ -503,6 +513,11 @@ def GetNodeCoord(mesh, nelx, nely):
             y1 = np.linspace(y0[i], 0.2+0.45*x0[i], nodey)
             for j in range(0, nodey):
                 y[i + j*nodex] = y1[j]   # collection of y
+
+        x = np.zeros((numnodes, 1))
+        for i in range(0, nodey):
+            for j in range(0, nodex):
+                x[j + i*nodex] = x0[j]   # collection of x
 
     elif mesh == 'random':
         y0 = 0.0*x0 # the bottom geometry line  
@@ -520,7 +535,7 @@ def GetNodeCoord(mesh, nelx, nely):
                 x[j + i*nodex] = x0[j]   # collection of x
         
         np.random.seed(1)
-        randnodes = np.random.rand(interiornodes)*h/2 -h/4
+        randnodes = np.random.rand(interiornodes)*h/2 - h/4
         for i in range(0,interiornodey):
             for j in range(0,interiornodex):
                 x[(i+1)*(nodex) + j+1][0] = x[(i+1)*(nodex) + j+1][0] - randnodes[j+i*interiornodex]
@@ -528,12 +543,6 @@ def GetNodeCoord(mesh, nelx, nely):
 
     else:
         print("Enter one of the mesh option: 'unifrom', 'nonuniform', 'stretched', 'random' ")
-
-
-    x = np.zeros((numnodes, 1))
-    for i in range(0, nodey):
-        for j in range(0, nodex):
-            x[j + i*nodex] = x0[j]   # collection of x
 
     return x, y
 
@@ -815,3 +824,10 @@ def AssembleDivOperator(mesh, nelx, nely):
 
     return U, D
 
+eps = 1
+itr = 0
+while 1+ eps !=1:
+    eps = eps/2
+    itr+=1
+
+print(eps)
