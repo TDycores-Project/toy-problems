@@ -288,8 +288,8 @@ def Perm():
 
 def GetMassMat(coord_E,Q,quadmethod):
     """This function returns the interpolation matrix at quadrature points
-    N and mass matrix Me = N^T*W*N, where
-    W = diag(W1,W2,...Wq) and Wi = wi*Kinv where Kinv is inverse of permeability matrix
+    N and mass matrix Me = N^T*W*N (interpolation of (v,K^{-1}*u)), where
+    W = diag(W1,W2,...Wq) and Wi = wi*K^{-1} where K^{-1} is inverse of permeability matrix
     Wi is 2x2 matrix.
 
     Input:
@@ -303,6 +303,7 @@ def GetMassMat(coord_E,Q,quadmethod):
     -------
     N: Nodal basis evaluated at quadrature points
     shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
+
     Me: the nodal interpolation matrix computed at quadrature points
     shape (8,8), 
     """
@@ -329,9 +330,7 @@ def GetMassMat(coord_E,Q,quadmethod):
 
 def GetDivMat(coord_E,Q,quadmethod):
     """This function returns the interpolation matrix at quadrature points
-    N and mass matrix Me = N^T*W*N, where
-    W = diag(W1,W2,...Wq) and Wi = wi*Kinv where Kinv is inverse of permeability matrix
-    Wi is 2x2 matrix.
+    for (q,div(u)) term in weak form
 
     Input:
     ------
@@ -342,10 +341,7 @@ def GetDivMat(coord_E,Q,quadmethod):
 
     Output:
     -------
-    N: Nodal basis evaluated at quadrature points
-    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
-    Me: the nodal interpolation matrix computed at quadrature points
-    shape (8,8), 
+    Be: interpolation of (q,div(u)) as (1,8) array
     """
     w, q = GetQuadrature(Q, quadmethod)
     D = np.zeros((0,8))
@@ -465,7 +461,7 @@ def GetNodeCoord(mesh, nelx, nely):
     nodex = nelx + 1
     nodey = nely + 1
     numnodes = nodex*nodey
-    
+    # interior nodes for random mesh
     interiornodex = nelx - 1
     interiornodey = nely - 1
     interiornodes = interiornodex*interiornodey
@@ -477,6 +473,7 @@ def GetNodeCoord(mesh, nelx, nely):
     # Divide [0,1] by nodex (mesh in the x direction)
     x0 = np.linspace(0, 1, nodex)
     if mesh == 'uniform':
+
         y0 = 0.0*x0 # the bottom geometry line  
 
         y = np.zeros((numnodes, 1))
@@ -492,6 +489,7 @@ def GetNodeCoord(mesh, nelx, nely):
                 x[j + i*nodex] = x0[j]   # collection of x
 
     elif mesh == 'nonuniform':
+
         y0 = 0.5*x0 # the bottom geometry line
 
         y = np.zeros((numnodes, 1))
@@ -506,6 +504,7 @@ def GetNodeCoord(mesh, nelx, nely):
                 x[j + i*nodex] = x0[j]   # collection of x
 
     elif mesh == 'stretched':
+
         y0 = 0.5*x0 # the bottom geometry line
 
         y = np.zeros((numnodes, 1))
@@ -520,6 +519,7 @@ def GetNodeCoord(mesh, nelx, nely):
                 x[j + i*nodex] = x0[j]   # collection of x
 
     elif mesh == 'random':
+
         y0 = 0.0*x0 # the bottom geometry line  
 
         y = np.zeros((numnodes, 1))
@@ -536,6 +536,7 @@ def GetNodeCoord(mesh, nelx, nely):
         
         np.random.seed(1)
         randnodes = np.random.rand(interiornodes)*h/2 - h/4
+        # perturb the (x,y) of interior nodes
         for i in range(0,interiornodey):
             for j in range(0,interiornodex):
                 x[(i+1)*(nodex) + j+1][0] = x[(i+1)*(nodex) + j+1][0] - randnodes[j+i*interiornodex]
@@ -700,17 +701,6 @@ def GetGlobalNormal(mesh, nelx, nely, e):
 
     return Nb, Nr, Nl, Nt
 
-def GetDivElem(mesh, nelx, nely, e):
-    """
-    This function returns the divergence operator for each element
-    We need it to test assembly 
-    """
-    CoordElem = GetCoordElem(mesh, nelx, nely, e)
-    De = GetDivACNodalBasis(CoordElem)
-
-    return De
-
-
 def GetVecUe(mesh, nelx, nely, e):
     """
     This function discretize the vector u = [x-y, x+y] on element e
@@ -806,25 +796,29 @@ def GetSharedEdgeDof(nelx, nely):
     return sharededge
 
 def AssembleDivOperator(mesh, nelx, nely):
-
+    """This function assembles div(u) and vector u.
+    we test divergence operator on multiple elements
+    """
     numelem = nelx*nely
     LMu = GetLMu(nelx, nely)
     ndof = np.amax(LMu) + 1
     U = np.zeros((ndof, 1))
     D = np.zeros((numelem, ndof))
+    
     for e in range(numelem):
         # get element restriction operator L for element e
         L = GetElementRestriction(mesh, nelx, nely, e)
         # get discretized vector u for element e
         Ue = GetVecUe(mesh, nelx, nely, e)
         # get divergence for element e
-        De = GetDivElem(mesh, nelx, nely, e)
+        CoordElem = GetCoordElem(mesh, nelx, nely, e)
+        De = GetDivACNodalBasis(CoordElem)
         # assemble U
         U = U + L.T @ Ue
         # assemble Divergence
         D[e,:] = De @ L
 
-    # divide those repeated dof by 2 in shared edges
+    # divide those repeated dof in shared edges by 2
     edgedof = GetSharedEdgeDof(nelx, nely)
     for i in range(len(edgedof)):
         U[edgedof[i],0] = U[edgedof[i],0]/2
