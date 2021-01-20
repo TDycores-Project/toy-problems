@@ -824,10 +824,3 @@ def AssembleDivOperator(mesh, nelx, nely):
 
     return U, D
 
-eps = 1
-itr = 0
-while 1+ eps !=1:
-    eps = eps/2
-    itr+=1
-
-print(eps)
