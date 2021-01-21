@@ -279,89 +279,6 @@ def GetQuadrature(Q, quadmethod):
     
     return w, q
 
-def Perm():
-    """ permeability is consider 1 as given
-    in MMS of AC paper.
-    """
-    k = np.array([[1,0],[0,1]])
-    return k
-
-def GetMassMat(coord_E,Q,quadmethod):
-    """This function returns the interpolation matrix at quadrature points
-    N and mass matrix Me = N^T*W*N (interpolation of (v,K^{-1}*u)), where
-    W = diag(W1,W2,...Wq) and Wi = wi*K^{-1} where K^{-1} is inverse of permeability matrix
-    Wi is 2x2 matrix.
-
-    Input:
-    ------
-    coord_E: coordinate of element E as 4x2 array
-    Q: number of quadrature points you want in 1D
-    quadmethod: The method for computing q and w
-    either 'GAUSS' or 'LGL'
-
-    Output:
-    -------
-    N: Nodal basis evaluated at quadrature points
-    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
-
-    Me: the nodal interpolation matrix computed at quadrature points
-    shape (8,8), 
-    """
-    k = Perm()
-    kinv = np.linalg.inv(k)
-    w, q = GetQuadrature(Q, quadmethod)
-    N = np.zeros((0,8))
-    W = np.zeros((2*Q*Q,2*Q*Q))
-    for i in range(Q):
-            for j in range(Q):
-                xhat = q[j]
-                yhat = q[i]
-                ww = w[i]*w[j]
-                Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
-                N = np.append(N,Nhat, axis=0)
-                W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww
-                W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww
-                W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww
-                W[2*j+1+2*Q*i][2*j+1+2*Q*i]=kinv[1][1]*ww
-
-    Me = N.T @ W @ N
-
-    return N, Me
-
-def GetDivMat(coord_E,Q,quadmethod):
-    """This function returns the interpolation matrix at quadrature points
-    for (q,div(u)) term in weak form
-
-    Input:
-    ------
-    coord_E: coordinate of element E as 4x2 array
-    Q: number of quadrature points you want in 1D
-    quadmethod: The method for computing q and w
-    either 'GAUSS' or 'LGL'
-
-    Output:
-    -------
-    Be: interpolation of (q,div(u)) as (1,8) array
-    """
-    w, q = GetQuadrature(Q, quadmethod)
-    D = np.zeros((0,8))
-    Nhatp = np.array([[1]])
-    Np = np.zeros((0,1))
-    W = np.zeros((Q*Q,Q*Q))
-    for i in range(Q):
-            for j in range(Q):
-                xhat = q[j]
-                yhat = q[i]
-                ww = w[i]*w[j]
-                Dhat = GetDivACNodalBasis(coord_E)
-                D = np.append(D,Dhat, axis=0)
-                W[j+Q*i][j+Q*i] = ww
-                Np = np.append(Np,Nhatp,axis=0)
-
-    Be = Np.T @ W @ D
-
-    return Be
-
 def GetConnectivity(nelx, nely):
     """This function returns the connectivity array based on edge
     ----5--------6----
@@ -825,3 +742,134 @@ def AssembleDivOperator(mesh, nelx, nely):
 
     return U, D
 
+
+def Perm():
+    """ permeability is consider 1 as given
+    in MMS of AC paper.
+    """
+    k = np.array([[1,0],[0,1]])
+    return k
+
+def GetLocalMassMat(coord_E,Q,quadmethod):
+    """This function returns the interpolation matrix at quadrature points
+    N and mass matrix Me = N^T*W*N (interpolation of (v,K^{-1}*u)), where
+    W = diag(W1,W2,...Wq) and Wi = wi*K^{-1} where K^{-1} is inverse of permeability matrix
+    Wi is 2x2 matrix.
+
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    N: Nodal basis evaluated at quadrature points
+    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
+
+    Me: the nodal interpolation matrix computed at quadrature points
+    shape (8,8), 
+    """
+    k = Perm()
+    kinv = np.linalg.inv(k)
+    w, q = GetQuadrature(Q, quadmethod)
+    N = np.zeros((0,8))
+    W = np.zeros((2*Q*Q,2*Q*Q))
+    for i in range(Q):
+            for j in range(Q):
+                xhat = q[j]
+                yhat = q[i]
+                ww = w[i]*w[j]
+                Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
+                N = np.append(N,Nhat, axis=0)
+                W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww
+                W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww
+                W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww
+                W[2*j+1+2*Q*i][2*j+1+2*Q*i]=kinv[1][1]*ww
+
+    Me = N.T @ W @ N
+
+    return Me
+
+def GetLocalDivANDForcing(coord_E,Q,quadmethod):
+    """This function returns the interpolation matrix at quadrature points
+    for (q,div(u)) term in weak form and forcing term (q,f)
+
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    Be: interpolation of (q,div(u)) as (1,8) array
+    Fpe: interpolation of (q,f) as 1x1 array
+    """
+    w, q = GetQuadrature(Q, quadmethod)
+    D = np.zeros((0,8))
+    Nhatp = np.array([[1]])
+    Np = np.zeros((0,1))
+    W = np.zeros((Q*Q,Q*Q))
+    Fp = np.zeros((0,1))
+    for i in range(Q):
+            for j in range(Q):
+                xhat = q[j]
+                yhat = q[i]
+                ww = w[i]*w[j]
+                X, DF_E, J_E = PiolaTransform(coord_E, [xhat,yhat])
+                x = X[0][0]
+                y = X[1][0]
+                # see sec.6 of AC paper 2016
+                fp = np.array([[2*(math.pi)**2*math.sin(math.pi*x)*math.sin(math.pi*y)]])
+                Fp = np.append(Fp,fp,axis=0)
+                Dhat = GetDivACNodalBasis(coord_E)
+                D = np.append(D,Dhat, axis=0)
+                W[j+Q*i][j+Q*i] = ww
+                Np = np.append(Np,Nhatp,axis=0)
+
+    Fpe = Np.T @ W @ Fp
+    Be = Np.T @ W @ D
+
+    return Be, Fpe
+
+
+def Assembly(mesh, nelx, nely, Q, quadmethod):
+    """This function assembles div(u) and vector u.
+    we test divergence operator on multiple elements
+    """
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    Fp = np.zeros((numelem, 1))
+    M = np.zeros((ndof,ndof))
+    B = np.zeros((numelem, ndof))
+    
+    for e in range(numelem):
+        # get element restriction operator L for element e
+        L = GetElementRestriction(mesh, nelx, nely, e)
+        # get discretized vector u for element e
+        CoordElem = GetCoordElem(mesh, nelx, nely, e)
+        Me = GetLocalMassMat(CoordElem,Q,quadmethod)
+        Be, Fpe = GetLocalDivANDForcing(CoordElem,Q,quadmethod)
+        
+        # assemble U
+        M = M + L.T @ Me @ L
+        # assemble Divergence
+        B[e,:] = Be @ L
+        Fp[e,:] = Fpe
+
+    # divide those repeated dof in shared edges by 2
+    edgedof = GetSharedEdgeDof(nelx, nely)
+    for i in range(len(edgedof)):
+        for j in range(len(edgedof)):
+            M[edgedof[i],edgedof[j]] = M[edgedof[i],edgedof[j]]/2
+
+
+    P = np.zeros((numelem,numelem))
+
+    K = np.block([[M, B.T],[B, P]])
+    
+    return K, Fp
