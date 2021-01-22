@@ -8,7 +8,7 @@ nely=2
 Q=2
 quadmethod='GAUSS'
 """
-import FE_subroutines as FE
+import FEACSubroutines as FE
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
@@ -40,6 +40,11 @@ def main():
                         default='GAUSS',
                         help='Quadmethod which can be GAUSS or LGL')
 
+    parser.add_argument('--mesh',
+                        dest='mesh',
+                        type=str,
+                        default='uniform',
+                        help='mesh distribution which can be:uniform, nonuniform, stretched, random')
 
     args = parser.parse_args()
 
@@ -47,11 +52,12 @@ def main():
     nely = args.nely
     Q = args.Q
     quadmethod = args.quadmethod
+    mesh = args.mesh
 
-    F, K = FE.Assembly(Q, quadmethod, nelx, nely)
+    F, K = FE.Assembly(mesh, nelx, nely, Q, quadmethod)
 
     dp, du = FE.GetFESol(K,F,nelx,nely)
-    p, u = FE.GetExactSol(nelx, nely)
+    p, u = FE.GetExactSol(mesh, nelx, nely)
 
     error_u = np.linalg.norm(du-u)
     error_p = np.linalg.norm(dp-p)
