@@ -869,7 +869,8 @@ def Assembly(mesh, nelx, nely, Q, quadmethod):
 
 
     P = np.zeros((numelem,numelem))
-
     K = np.block([[M, B.T],[B, P]])
-    
-    return K, Fp
+    Fu = np.zeros((ndof,1))
+    F = np.block([[Fu],[Fp]])
+
+    return F, K
