@@ -13,7 +13,6 @@ import FEACSubroutines as FE
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib.tri as tri
 
 def main():
     parser = argparse.ArgumentParser(description='Input for FE_subroutines')
@@ -63,22 +62,27 @@ def main():
     mesh = args.mesh
     MMS = args.MMS
 
-    F, K = FE.Assembly(MMS, mesh, nelx, nely, Q, quadmethod)
+    F, K, M, B = FE.Assembly(MMS, mesh, nelx, nely, Q, quadmethod)
 
     dp, du = FE.GetFESol(K,F,nelx,nely)
     p, u = FE.GetExactSol(MMS, mesh, nelx, nely)
+    res_p, res_u = FE.GetResidual(K,u,p, nelx, nely)
+
     error_u = np.absolute(du-u)
     error_p = np.absolute(dp-p)
     normerror_u = np.linalg.norm(du-u)
     normerror_p = np.linalg.norm(dp-p)
     print("norm of error of velocity is: ",normerror_u)
     print("norm of error of pressure is: ",normerror_p)
-    #for i in range(len(u)):
-    #    print(i+1,'---',u[i,0],'====',du[i,0])
 
-    FE.PltSolution(mesh, nelx, nely, u, p)
-    FE.PltSolution(mesh, nelx, nely, du, dp)
-    FE.PltSolution(mesh, nelx, nely, error_u, error_p)
+    l = FE.GetEigenvalue(M, B)
+    print("Eigenvalues of B*M^{-1}*B^T:")
+    print(l)
+
+    FE.PltSolution(mesh, nelx, nely, u, p,'ux_ex','uy_ex','p_ex')
+    FE.PltSolution(mesh, nelx, nely, du, dp, 'ux_h','uy_h','p_h')
+    FE.PltSolution(mesh, nelx, nely, error_u, error_p,'abs(ux_ex - ux_h)', 'abs(uy_ex - uy_h)', 'abs(p_ex - p_h)')
+    FE.PltSolution(mesh, nelx, nely, res_u, res_p, 'res_ux','res_uy','res_p')
 
     return
 
