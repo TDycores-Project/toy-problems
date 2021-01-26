@@ -880,7 +880,7 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
     Fu = np.zeros((ndof,1))
     F = np.block([[Fu],[-1*Fp]])
 
-    return F, K
+    return F, K, M, B
 
 def GetFESol(K,F,nelx,nely):
 
@@ -976,7 +976,7 @@ def GetExactSol(MMS, mesh, nelx, nely):
     
     return p, u
 
-def PltSolution(mesh,nelx, nely, u, p):
+def PltSolution(mesh,nelx, nely, u, p, title1, title2, title3):
 
     nen = 4
     IENe, IENn = GetConnectivity(nelx, nely)
@@ -987,6 +987,7 @@ def PltSolution(mesh,nelx, nely, u, p):
     yy = []
     uux = []
     uuy = []
+    pp = []
     localnodes = [0, 2, 1, 3]
     node_ux = [4,5,2,3]
     node_uy = [0,6,1,7]
@@ -996,15 +997,52 @@ def PltSolution(mesh,nelx, nely, u, p):
             yy.append(y[IENn[localnodes[j], i]])
             uux.append(u[LMu[node_ux[j], i]])
             uuy.append(u[LMu[node_uy[j], i]])
+            pp.append(p[i][0])
 
     plt.tricontourf(np.array(xx).squeeze(),np.array(yy).squeeze(),np.array(uux).squeeze(),100, cmap=plt.get_cmap('coolwarm'))
-    plt.title('ux')
+    plt.title(title1)
     plt.colorbar()
     plt.show()
 
     plt.tricontourf(np.array(xx).squeeze(),np.array(yy).squeeze(),np.array(uuy).squeeze(),100, cmap=plt.get_cmap('coolwarm'))
-    plt.title('uy')
+    plt.title(title2)
+    plt.colorbar()
+    plt.show()
+
+    plt.tricontourf(np.array(xx).squeeze(),np.array(yy).squeeze(),np.array(pp).squeeze(),100, cmap=plt.get_cmap('coolwarm'))
+    plt.title(title3)
     plt.colorbar()
     plt.show()
 
     return
+
+
+def GetResidual(K,u,p, nelx, nely):
+    U = np.block([[u],[p]])
+    res = K @ U
+
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    numelem = nelx*nely
+    res_u = np.zeros((ndof,1))
+    res_p = np.zeros((numelem,1))
+    for i in range(ndof):
+        res_u[i,0] = res[i,0]
+
+    for i in range(numelem):
+        res_p[i] = res[ndof+i,0]
+
+    return res_p, res_u
+
+def GetEigenvalue(M,B):
+
+    Minv = np.linalg.inv(M)
+    D, V = np.linalg.eig(B @ Minv @ B.T)
+    # we need to sort the eigenvalues, is not sorted
+    idx = np.argsort(D)
+    #V = V[:,idx]
+    l1 = []
+    for i in range(len(D)):
+        l1.append(D[idx[i]])
+
+    return l1
