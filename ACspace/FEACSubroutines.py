@@ -372,7 +372,6 @@ def GetNodeCoord(mesh, nelx, nely):
     |     ----1----/
     0----/
     There are 4 elements (numbering in parenthesis), and 9 nodes.
-    Bottom edge (0 to 1) is y=0.5x^2. (see src/test_subroutines.py)
     This function returns x,y as 9x2 array for the above mesh.
     """
     nodex = nelx + 1
@@ -482,7 +481,7 @@ def plotmesh(mesh, nelx, nely):
 
         plt.fill(xx, yy, edgecolor='black', fill=False)
 
-    plt.title('Mesh distribution')
+    #plt.title('Mesh distribution')
     plt.show()
 
     return
@@ -621,6 +620,7 @@ def GetGlobalNormal(mesh, nelx, nely, e):
 def GetVecUe(mesh, nelx, nely, e):
     """
     This function discretize the vector u = [x-y, x+y] on element e
+    This for testing divergence operator given in uint test
     """
     CoordElem = GetCoordElem(mesh, nelx, nely, e)
 
@@ -715,6 +715,7 @@ def GetSharedEdgeDof(nelx, nely):
 def AssembleDivOperator(mesh, nelx, nely):
     """This function assembles div(u) and vector u.
     we test divergence operator on multiple elements
+    This for testing divergence operator given in uint test
     """
     numelem = nelx*nely
     LMu = GetLMu(nelx, nely)
@@ -783,16 +784,17 @@ def GetLocalMassMat(coord_E,Q,quadmethod):
                 ww = w[i]*w[j]
                 Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
                 N = np.append(N,Nhat, axis=0)
-                W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww
-                W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww
-                W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww
-                W[2*j+1+2*Q*i][2*j+1+2*Q*i]=kinv[1][1]*ww
+                X, DF_E, J_E = PiolaTransform(coord_E, [xhat,yhat])
+                W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww*J_E
+                W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww*J_E
+                W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww*J_E
+                W[2*j+1+2*Q*i][2*j+1+2*Q*i]=kinv[1][1]*ww*J_E
 
     Me = N.T @ W @ N
 
     return Me
 
-def GetLocalDivANDForcing(coord_E,Q,quadmethod):
+def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
     """This function returns the interpolation matrix at quadrature points
     for (q,div(u)) term in weak form and forcing term (q,f)
 
@@ -822,12 +824,17 @@ def GetLocalDivANDForcing(coord_E,Q,quadmethod):
                 X, DF_E, J_E = PiolaTransform(coord_E, [xhat,yhat])
                 x = X[0][0]
                 y = X[1][0]
+                if MMS == 'trig':
                 # see sec.6 of AC paper 2016
-                fp = np.array([[2*(math.pi)**2*math.sin(math.pi*x)*math.sin(math.pi*y)]])
+                    fp = np.array([[2*(math.pi)**2*math.sin(math.pi*x)*math.sin(math.pi*y)]])
+                elif MMS == 'quartic':
+                    fp = np.array([[2*y*(1-y)+2*x*(1-x)]])
+                else:
+                    print('ENter MMS solution, trig or quartic')
                 Fp = np.append(Fp,fp,axis=0)
                 Dhat = GetDivACNodalBasis(coord_E)
                 D = np.append(D,Dhat, axis=0)
-                W[j+Q*i][j+Q*i] = ww
+                W[j+Q*i][j+Q*i] = ww*J_E
                 Np = np.append(Np,Nhatp,axis=0)
 
     Fpe = Np.T @ W @ Fp
@@ -836,7 +843,7 @@ def GetLocalDivANDForcing(coord_E,Q,quadmethod):
     return Be, Fpe
 
 
-def Assembly(mesh, nelx, nely, Q, quadmethod):
+def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
     """This function assembles div(u) and vector u.
     we test divergence operator on multiple elements
     """
@@ -853,7 +860,7 @@ def Assembly(mesh, nelx, nely, Q, quadmethod):
         # get discretized vector u for element e
         CoordElem = GetCoordElem(mesh, nelx, nely, e)
         Me = GetLocalMassMat(CoordElem,Q,quadmethod)
-        Be, Fpe = GetLocalDivANDForcing(CoordElem,Q,quadmethod)
+        Be, Fpe = GetLocalDivANDForcing(MMS, CoordElem,Q,quadmethod)
         
         # assemble U
         M = M + L.T @ Me @ L
@@ -869,8 +876,135 @@ def Assembly(mesh, nelx, nely, Q, quadmethod):
 
 
     P = np.zeros((numelem,numelem))
-    K = np.block([[M, B.T],[B, P]])
+    K = np.block([[M, -1*B.T],[-1*B, P]])
     Fu = np.zeros((ndof,1))
-    F = np.block([[Fu],[Fp]])
+    F = np.block([[Fu],[-1*Fp]])
 
     return F, K
+
+def GetFESol(K,F,nelx,nely):
+
+    d = np.linalg.solve(K, F)
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    numelem = nelx*nely
+    du = np.zeros((ndof,1))
+    dp = np.zeros((numelem,1))
+    for i in range(ndof):
+        du[i,0] = d[i,0]
+
+    for i in range(numelem):
+        dp[i] = d[ndof+i,0]
+
+    return dp, du
+
+
+def GetUexact(MMS, mesh, nelx, nely, e):
+    """
+    This function discretize the vector u = [x-y, x+y] on element e
+    This for testing divergence operator
+    """
+    CoordElem = GetCoordElem(mesh, nelx, nely, e)
+
+    nl, X = GetNormal(CoordElem, [-1., 0.])
+    nr, X = GetNormal(CoordElem, [1., 0.])
+    nb, X = GetNormal(CoordElem, [0., -1.])
+    nt, X = GetNormal(CoordElem, [0., 1.])
+
+    normals = np.block([[nb],[nb],[nr],[nr],[nl],[nl],[nt],[nt]])
+    nodes = np.block([CoordElem[0,:],CoordElem[1,:],CoordElem[1,:],CoordElem[3,:],
+                      CoordElem[0,:],CoordElem[2,:],CoordElem[2,:],CoordElem[3,:]])
+
+    ue = np.zeros((8,1))
+    for i in range(8):
+        x = nodes[2*i]
+        y = nodes[2*i+1]
+        if MMS == 'trig':
+            u = [-math.pi*math.cos(math.pi*x)*math.sin(math.pi*y), -math.pi*math.sin(math.pi*x)*math.cos(math.pi*y)]
+            ue[i][0] = np.dot(u,normals[i,:])
+        elif MMS == 'quartic':
+            u = [-y*(1-y)*(1-2*x),-x*(1-x)*(1-2*y)]
+            ue[i][0] = np.dot(u,normals[i,:])
+        else:
+            print('ENter MMS solution, trig or quartic')
+
+    return ue
+
+def GetExactSol(MMS, mesh, nelx, nely):
+    """ based on sec. 6 AC paper 2016
+    p(x,y) = sin(pi*x)*sin(pi*y)
+    ux(x,y) = -pi*cos(pi*x)*sin(pi*y)
+    uy(x,y) = -pi*sin(pi*x)*cos(pi*y)
+    Note permeability is 1
+    """
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    u = np.zeros((ndof, 1))
+    
+    for e in range(numelem):
+        # get element restriction operator L for element e
+        L = GetElementRestriction(mesh, nelx, nely, e)
+        # get discretized vector u for element e
+        ue = GetUexact(MMS, mesh, nelx, nely, e)
+        # assemble U
+        u = u + L.T @ ue
+
+    # divide those repeated dof in shared edges by 2
+    edgedof = GetSharedEdgeDof(nelx, nely)
+    for i in range(len(edgedof)):
+        u[edgedof[i],0] = u[edgedof[i],0]/2
+
+    x , y = GetNodeCoord(mesh, nelx, nely)
+    xp = np.zeros((numelem,1))
+    yp = np.zeros((numelem,1))
+    p = np.zeros((numelem,1))
+    for i in range(nely):
+        for j in range(nelx):
+            xp[j + i*nelx][0] = (x[j + i*(nelx+1)][0]+x[j + i*(nelx+1)+1][0])/2
+            yp[j + i*nelx][0] = (y[j + i*(nelx+1)][0]+y[(nelx+1 + j) + i*(nelx+1)][0])/2
+
+    for i in range(numelem):
+            x = xp[i][0]
+            y = yp[i][0]
+            if MMS == 'trig':
+                p[i][0] = math.sin(math.pi*x)*math.sin(math.pi*y)
+            elif MMS == 'quartic':
+                p[i][0] = x*(1-x)*y*(1-y)
+            else:
+                print('ENter MMS solution, trig or quartic')
+    
+    return p, u
+
+def PltSolution(mesh,nelx, nely, u, p):
+
+    nen = 4
+    IENe, IENn = GetConnectivity(nelx, nely)
+    x , y = GetNodeCoord(mesh,nelx, nely)
+    LMu = GetLMu(nelx, nely)
+    numelem = nelx * nely
+    xx = []
+    yy = []
+    uux = []
+    uuy = []
+    localnodes = [0, 2, 1, 3]
+    node_ux = [4,5,2,3]
+    node_uy = [0,6,1,7]
+    for i in range(numelem):
+        for j in range(nen):
+            xx.append(x[IENn[localnodes[j], i]])
+            yy.append(y[IENn[localnodes[j], i]])
+            uux.append(u[LMu[node_ux[j], i]])
+            uuy.append(u[LMu[node_uy[j], i]])
+
+    plt.tricontourf(np.array(xx).squeeze(),np.array(yy).squeeze(),np.array(uux).squeeze(),100, cmap=plt.get_cmap('coolwarm'))
+    plt.title('ux')
+    plt.colorbar()
+    plt.show()
+
+    plt.tricontourf(np.array(xx).squeeze(),np.array(yy).squeeze(),np.array(uuy).squeeze(),100, cmap=plt.get_cmap('coolwarm'))
+    plt.title('uy')
+    plt.colorbar()
+    plt.show()
+
+    return
