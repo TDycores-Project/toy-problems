@@ -1,6 +1,9 @@
 """ This file includes the necessary modules for
 implementing AC mixed-FEM. 
 See TODD ARBOGAST, MAICON R. CORREA, SIAM journal 2016
+week form
+ (v,k^{-1}*u) - (div(v),p) = -<v\cdot n, g>,   for all v in V
+-(w,div(u))                = -(w,f),           for all w in W
 """
 
 import numpy as np
@@ -9,8 +12,8 @@ import sys
 from sympy import *
 import matplotlib.pyplot as plt
 
-def PiolaTransform(coord_E, Xhat):
-    """ Test of this function is passed! See test_FE_subroutines.py
+def BilinearMap(coord_E, Xhat):
+    """ 
     This function maps Xhat=[xhat,yhat] in Ehat=[-1,1]^2 
     to X=(x,y) in E.
     or vector vhat in Ehat to v in E.
@@ -73,7 +76,7 @@ def GetNormal(coord_E, Xhat):
     enter coord_E, and (-1,0) to get 'n' of the left edge of E and corresponding (x,y)
     """
 
-    X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
+    X, DF_E, J_E = BilinearMap(coord_E, Xhat)
     
     dxdxhat = DF_E[0][0]
     dydxhat = DF_E[1][0]
@@ -126,7 +129,7 @@ def VACred(coord_E, Xhat):
     # sigma_hat_2 = curl((1-yhat^2)*xhat)
     sghat2 = np.array([[-2*xhat*yhat],[yhat**2-1]])
 
-    X, DF_E, J_E = PiolaTransform(coord_E, Xhat)
+    X, DF_E, J_E = BilinearMap(coord_E, Xhat)
     # sigma_i = P_E*sigma_hat_i
     sg1 = (DF_E/J_E) @ sghat1
     sg2 = (DF_E/J_E) @ sghat2
@@ -620,7 +623,7 @@ def GetGlobalNormal(mesh, nelx, nely, e):
 def GetVecUe(mesh, nelx, nely, e):
     """
     This function discretize the vector u = [x-y, x+y] on element e
-    This for testing divergence operator given in uint test
+    This is for testing divergence operator given in uint test
     """
     CoordElem = GetCoordElem(mesh, nelx, nely, e)
 
@@ -784,7 +787,7 @@ def GetLocalMassMat(coord_E,Q,quadmethod):
                 ww = w[i]*w[j]
                 Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
                 N = np.append(N,Nhat, axis=0)
-                X, DF_E, J_E = PiolaTransform(coord_E, [xhat,yhat])
+                X, DF_E, J_E = BilinearMap(coord_E, [xhat,yhat])
                 W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww*J_E
                 W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww*J_E
                 W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww*J_E
@@ -821,7 +824,7 @@ def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
                 xhat = q[j]
                 yhat = q[i]
                 ww = w[i]*w[j]
-                X, DF_E, J_E = PiolaTransform(coord_E, [xhat,yhat])
+                X, DF_E, J_E = BilinearMap(coord_E, [xhat,yhat])
                 x = X[0][0]
                 y = X[1][0]
                 if MMS == 'trig':
@@ -865,8 +868,8 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
         # assemble U
         M = M + L.T @ Me @ L
         # assemble Divergence
-        B[e,:] = Be @ L
-        Fp[e,:] = Fpe
+        B[e,:] = (-1*Be) @ L
+        Fp[e,:] = (-1*Fpe)
 
     # divide those repeated dof in shared edges by 2
     edgedof = GetSharedEdgeDof(nelx, nely)
@@ -876,11 +879,12 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
 
 
     P = np.zeros((numelem,numelem))
-    K = np.block([[M, -1*B.T],[-1*B, P]])
+    K = np.block([[M, B.T],[B, P]])
     Fu = np.zeros((ndof,1))
-    F = np.block([[Fu],[-1*Fp]])
+    F = np.block([[Fu],[Fp]])
 
     return F, K, M, B
+
 
 def GetFESol(K,F,nelx,nely):
 

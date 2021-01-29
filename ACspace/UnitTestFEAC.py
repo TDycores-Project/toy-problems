@@ -3,9 +3,9 @@ import FEACSubroutines as FE
 import numpy as np
 import math
 
-class TestPiolaTransformation(unittest.TestCase):
+class TestBilinearMap(unittest.TestCase):
 
-    def test_Piola1(self):
+    def test_Bilinear1(self):
         """ Note 
         2---3
         |   |
@@ -16,7 +16,7 @@ class TestPiolaTransformation(unittest.TestCase):
                    [0.,1.],
                    [1.,1.]]
         Xhat = [-1,-1]
-        X, DF_E, J_E = FE.PiolaTransform(coord_E, Xhat)
+        X, DF_E, J_E = FE.BilinearMap(coord_E, Xhat)
 
         self.assertEqual(X[0][0], coord_E[0][0])
         self.assertEqual(X[1][0], coord_E[0][1])
@@ -25,7 +25,7 @@ class TestPiolaTransformation(unittest.TestCase):
         self.assertEqual(DF_E[0][1],0.)
         self.assertEqual(DF_E[1][1],0.5)
 
-    def test_Piola2(self):
+    def test_Bilinear2(self):
         """ Note 
         2---3
         |   |
@@ -36,7 +36,7 @@ class TestPiolaTransformation(unittest.TestCase):
                    [0.,1.],
                    [1.,1.]]
         Xhat = [0., 0.]
-        X, DF_E, J_E = FE.PiolaTransform(coord_E, Xhat)
+        X, DF_E, J_E = FE.BilinearMap(coord_E, Xhat)
 
         self.assertEqual(X[0][0], 0.5)
         self.assertEqual(X[1][0], 0.5)
@@ -571,8 +571,9 @@ class TestDivergenceUniform(unittest.TestCase):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence4(self):
-        nelx = 2
-        nely = 4
+        nelx = 9
+        nely = 7
+        #FE.plotmesh('uniform', nelx, nely)
         U, D = FE.AssembleDivOperator('uniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
@@ -618,6 +619,7 @@ class TestDivergenceNonUniform(unittest.TestCase):
     def test_Divergence4(self):
         nelx = 2
         nely = 5
+        #FE.plotmesh('nonuniform', nelx, nely)
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
@@ -663,6 +665,7 @@ class TestDivergenceStretched(unittest.TestCase):
     def test_Divergence4(self):
         nelx = 2
         nely = 5
+        #FE.plotmesh('stretched', nelx, nely)
         U, D = FE.AssembleDivOperator('stretched', nelx, nely)
         Div = D @ U
         d = FE.div_u()
