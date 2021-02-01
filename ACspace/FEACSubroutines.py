@@ -5,23 +5,137 @@ week form
  (v,k^{-1}*u) - (div(v),p) = -<v\cdot n, g>,   for all v in V
 -(w,div(u))                = -(w,f),           for all w in W
 """
-
 import numpy as np
 import math
 import sys
 from sympy import *
 import matplotlib.pyplot as plt
 
+
+def Perm(x, y):
+    """ permeability is consider 1 as given
+    in MMS of AC paper.
+    """
+    k = np.array([[1.,0],[0,1.]])
+    return k
+
+def PressureConstant(x, y):
+
+    p = 3.14
+
+    return p
+
+def VelocityConstant(x, y):
+
+    vx = 0.
+    vy = 0.
+    v = [vx, vy]
+    return v
+
+def ForcingConstant(x, y):
+
+    f = 0.
+
+    return f
+
+def PressureLinear(x, y):
+
+    p = 3.14 + x + y
+
+    return p
+
+def VelocityLinear(x, y):
+
+    k = Perm(x, y)
+    vx = -(k[0][0]*1. + k[0][1]*1.)
+    vy = -(k[1][0]*1. + k[1][1]*1.)
+    v = [vx, vy]
+    return v
+
+def ForcingLinear(x, y):
+
+    f = 0.
+
+    return f
+
+def PressureQuadratic(x, y):
+
+    p = 3.14 + x*(1-x) + y*(1-y)
+
+    return p
+
+def VelocityQuadratic(x, y):
+
+    k = Perm(x, y)
+    vx = -(k[0][0]*(1-2*x) + k[0][1]*(1-2*y))
+    vy = -(k[1][0]*(1-2*x) + k[1][1]*(1-2*y))
+    v = [vx, vy]
+    return v
+
+def ForcingQuadratic(x, y):
+
+    k = Perm(x, y)
+    f = k[0][0]*2 + k[1][1]*2
+
+    return f
+
+def PressureQuartic(x, y):
+
+    p = x*(1-x)*y*(1-y)
+
+    return p
+
+def VelocityQuartic(x, y):
+
+    k = Perm(x, y)
+    vx = -(k[0][0]*(1-2*x)*y*(1-y) + k[0][1]*(1-2*y)*x*(1-x))
+    vy = -(k[1][0]*(1-2*x)*y*(1-y) + k[1][1]*(1-2*y)*x*(1-x))
+    v = [vx, vy]
+    return v
+
+def ForcingQuartic(x, y):
+
+    k = Perm(x, y)
+    vx_x = 2*k[0][0]*y*(1-y) - k[0][1]*(1-2*y)*(1-2*x)
+    vy_y = 2*k[1][1]*x*(1-x) - k[1][0]*(1-2*y)*(1-2*x)
+    f = vx_x + vy_y
+    return f
+
+def PressureTrig(x, y):
+
+    p = math.sin(math.pi*x)*math.sin(math.pi*y)
+
+    return p
+
+def VelocityTrig(x, y):
+
+    k = Perm(x, y)
+    vx = -math.pi*(k[0][0]*math.cos(math.pi*x)*math.sin(math.pi*y)
+                 + k[0][1]*math.sin(math.pi*x)*math.cos(math.pi*y))
+    vy = -math.pi*(k[1][0]*math.cos(math.pi*x)*math.sin(math.pi*y)
+                 + k[1][1]*math.sin(math.pi*x)*math.cos(math.pi*y))
+    v = [vx, vy]
+    return v
+
+def ForcingTrig(x, y):
+
+    k = Perm(x, y)
+    vx_x = -math.pi**2*(-k[0][0]*math.sin(math.pi*x)*math.sin(math.pi*y)
+                        +k[0][1]*math.cos(math.pi*x)*math.cos(math.pi*y))
+    vy_y = -math.pi**2*(k[1][0]*math.cos(math.pi*x)*math.cos(math.pi*y)
+                       -k[1][1]*math.sin(math.pi*x)*math.sin(math.pi*y))
+    f = vx_x + vy_y
+    return f
+
 def BilinearMap(coord_E, Xhat):
     """ 
     This function maps Xhat=[xhat,yhat] in Ehat=[-1,1]^2 
     to X=(x,y) in E.
-    or vector vhat in Ehat to v in E.
     Written based on eq. (3.3), (3.4) of AC paper 2016
     Input:
     ------
-    coord_E: coordinates of quadrilateral E with vertices oriented
-    counterclockwise. coord_E is 4x2 array
+    coord_E: coordinates of quadrilateral E .
+    coord_E is 4x2 array
     coord_E = [[x0,y0],
                [x1,y1],
                [x2,y2],
@@ -747,13 +861,6 @@ def AssembleDivOperator(mesh, nelx, nely):
     return U, D
 
 
-def Perm():
-    """ permeability is consider 1 as given
-    in MMS of AC paper.
-    """
-    k = np.array([[1,0],[0,1]])
-    return k
-
 def GetLocalMassMat(coord_E,Q,quadmethod):
     """This function returns the interpolation matrix at quadrature points
     N and mass matrix Me = N^T*W*N (interpolation of (v,K^{-1}*u)), where
@@ -775,8 +882,6 @@ def GetLocalMassMat(coord_E,Q,quadmethod):
     Me: the nodal interpolation matrix computed at quadrature points
     shape (8,8), 
     """
-    k = Perm()
-    kinv = np.linalg.inv(k)
     w, q = GetQuadrature(Q, quadmethod)
     N = np.zeros((0,8))
     W = np.zeros((2*Q*Q,2*Q*Q))
@@ -788,6 +893,10 @@ def GetLocalMassMat(coord_E,Q,quadmethod):
                 Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
                 N = np.append(N,Nhat, axis=0)
                 X, DF_E, J_E = BilinearMap(coord_E, [xhat,yhat])
+                x = X[0][0]
+                y = X[1][0]
+                k = Perm(x, y)
+                kinv = np.linalg.inv(k)
                 W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww*J_E
                 W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww*J_E
                 W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww*J_E
@@ -795,7 +904,7 @@ def GetLocalMassMat(coord_E,Q,quadmethod):
 
     Me = N.T @ W @ N
 
-    return Me
+    return Me, N
 
 def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
     """This function returns the interpolation matrix at quadrature points
@@ -829,11 +938,22 @@ def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
                 y = X[1][0]
                 if MMS == 'trig':
                 # see sec.6 of AC paper 2016
-                    fp = np.array([[2*(math.pi)**2*math.sin(math.pi*x)*math.sin(math.pi*y)]])
+                    f = ForcingTrig(x, y)
+                    fp = np.array([[f]])
                 elif MMS == 'quartic':
-                    fp = np.array([[2*y*(1-y)+2*x*(1-x)]])
+                    f = ForcingQuartic(x, y)
+                    fp = np.array([[f]])
+                elif MMS == 'quadratic':
+                    f = ForcingQuadratic(x, y)
+                    fp = np.array([[f]])
+                elif MMS == 'linear':
+                    f = ForcingLinear(x, y)
+                    fp = np.array([[f]])
+                elif MMS == 'constant':
+                    f = ForcingConstant(x, y)
+                    fp = np.array([[f]])
                 else:
-                    print('ENter MMS solution, trig or quartic')
+                    print('ENter MMS solution, trig, quartic or quadratic')
                 Fp = np.append(Fp,fp,axis=0)
                 Dhat = GetDivACNodalBasis(coord_E)
                 D = np.append(D,Dhat, axis=0)
@@ -862,7 +982,7 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
         L = GetElementRestriction(mesh, nelx, nely, e)
         # get discretized vector u for element e
         CoordElem = GetCoordElem(mesh, nelx, nely, e)
-        Me = GetLocalMassMat(CoordElem,Q,quadmethod)
+        Me, N = GetLocalMassMat(CoordElem,Q,quadmethod)
         Be, Fpe = GetLocalDivANDForcing(MMS, CoordElem,Q,quadmethod)
         
         # assemble U
@@ -884,6 +1004,122 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
     F = np.block([[Fu],[Fp]])
 
     return F, K, M, B
+
+
+def GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e):
+
+    w, q = GetQuadrature(Q, quadmethod)
+    W = np.zeros((Q,Q))
+    G = np.zeros((Q,1))
+    N_bc = np.zeros((8,Q))
+    coord_E = GetCoordElem(mesh, nelx, nely, e)
+
+    for i in range(Q):
+        if edge == 'bottom':
+            yhat = -1.
+            xhat = q[i]
+            X, DF_E, J_E = BilinearMap(coord_E, [xhat, yhat])
+            je = math.sqrt(DF_E[0][0]*DF_E[0][0] + DF_E[1][0]*DF_E[1][0])
+            n, X = GetNormal(coord_E, [0., -1.])
+        elif edge == 'right':
+            yhat = q[i]
+            xhat = 1.
+            X, DF_E, J_E = BilinearMap(coord_E, [xhat, yhat])
+            je = math.sqrt(DF_E[0][1]*DF_E[0][1] + DF_E[1][1]*DF_E[1][1])
+            n, X = GetNormal(coord_E, [1., 0.])
+        elif edge == 'top':
+            yhat = 1.
+            xhat = q[i]
+            X, DF_E, J_E = BilinearMap(coord_E, [xhat, yhat])
+            je = math.sqrt(DF_E[0][0]*DF_E[0][0] + DF_E[1][0]*DF_E[1][0])
+            n, X = GetNormal(coord_E, [0., 1.])
+        elif edge == 'left':
+            yhat = q[i]
+            xhat = -1.
+            X, DF_E, J_E = BilinearMap(coord_E, [xhat, yhat])
+            je = math.sqrt(DF_E[0][1]*DF_E[0][1] + DF_E[1][1]*DF_E[1][1])
+            n, X = GetNormal(coord_E, [-1., 0.])
+        else:
+            print("edge is not defined")
+
+        Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
+        N_dot_n = np.dot(Nhat.T,n)
+        N_bc[:,i] = N_dot_n[:]
+        x = X[0][0]
+        y = X[1][0]
+        if MMS == 'trig':
+            p = PressureTrig(x, y)
+            g = p
+        elif MMS == 'quartic':
+            p = PressureQuartic(x, y)
+            g = p
+        elif MMS == 'quadratic':
+            p = PressureQuadratic(x, y)
+            g = p
+        elif MMS == 'linear':
+            p = PressureLinear(x, y)
+            g = p
+        elif MMS == 'constant':
+            p = PressureConstant(x, y)
+            g = p
+        else:
+            print('Enter MMS solution, trig, quartic or quadratic')
+
+        G[i,0] = g
+        W[i][i] = w[i]*je
+
+    t = N_bc @ W @ G
+
+    return t
+
+def GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge):
+
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    T = np.zeros((ndof+numelem,1))
+    if edge == 'bottom':
+        for e in range(nelx):
+            d1 = LMu[0,e]
+            d2 = LMu[1,e]
+            t = GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e)
+            T[d1][0] = t[0][0]
+            T[d2][0] = t[1][0]
+    
+    elif edge == 'right':
+        for e in range(nelx-1,numelem,nelx):
+            d1 = LMu[2,e]
+            d2 = LMu[3,e]
+            t = GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e)
+            T[d1][0] = t[2][0]
+            T[d2][0] = t[3][0]
+
+    elif edge == 'left':
+        for e in range(0,numelem-nelx+1,nelx):
+            d1 = LMu[4,e]
+            d2 = LMu[5,e]
+            t = GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e)
+            T[d1][0] = -t[4][0]
+            T[d2][0] = -t[5][0]
+
+    elif edge == 'top':
+        for e in range(numelem-nelx,numelem):
+            d1 = LMu[6,e]
+            d2 = LMu[7,e]
+            t = GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e)
+            T[d1][0] = -t[6][0]
+            T[d2][0] = -t[7][0]
+
+    elif edge == 'all':
+        edges = ['bottom','right','top','left']
+        for i in range(4):
+            t = GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edges[i])
+            T = T + t
+    
+    else:
+        print("specify the edge")
+
+    return T
 
 
 def GetFESol(K,F,nelx,nely):
@@ -924,13 +1160,23 @@ def GetUexact(MMS, mesh, nelx, nely, e):
         x = nodes[2*i]
         y = nodes[2*i+1]
         if MMS == 'trig':
-            u = [-math.pi*math.cos(math.pi*x)*math.sin(math.pi*y), -math.pi*math.sin(math.pi*x)*math.cos(math.pi*y)]
+            u = VelocityTrig(x, y)
             ue[i][0] = np.dot(u,normals[i,:])
         elif MMS == 'quartic':
-            u = [-y*(1-y)*(1-2*x),-x*(1-x)*(1-2*y)]
+            u = VelocityQuartic(x, y)
+            u = u
+            ue[i][0] = np.dot(u,normals[i,:])
+        elif MMS == 'quadratic':
+            u = VelocityQuadratic(x, y)
+            ue[i][0] = np.dot(u,normals[i,:])
+        elif MMS == 'linear':
+            u = VelocityLinear(x, y)
+            ue[i][0] = np.dot(u,normals[i,:])
+        elif MMS == 'constant':
+            u = VelocityConstant(x, y)
             ue[i][0] = np.dot(u,normals[i,:])
         else:
-            print('ENter MMS solution, trig or quartic')
+            print('ENter MMS solution, trig, quartic or quadratic')
 
     return ue
 
@@ -972,11 +1218,22 @@ def GetExactSol(MMS, mesh, nelx, nely):
             x = xp[i][0]
             y = yp[i][0]
             if MMS == 'trig':
-                p[i][0] = math.sin(math.pi*x)*math.sin(math.pi*y)
+                pe = PressureTrig(x, y)
+                p[i][0] = pe
             elif MMS == 'quartic':
-                p[i][0] = x*(1-x)*y*(1-y)
+                pe = PressureQuartic(x, y)
+                p[i][0] = pe
+            elif MMS == 'quadratic':
+                pe = PressureQuadratic(x, y)
+                p[i][0] = pe
+            elif MMS == 'linear':
+                pe = PressureLinear(x, y)
+                p[i][0] = pe
+            elif MMS == 'constant':
+                pe = PressureConstant(x, y)
+                p[i][0] = pe
             else:
-                print('ENter MMS solution, trig or quartic')
+                print('ENter MMS solution, trig, quartic or quadratic')
     
     return p, u
 

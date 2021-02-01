@@ -51,7 +51,7 @@ def main():
                         dest='MMS',
                         type=str,
                         default='quartic',
-                        help='MMS solution which can be:trig, quartic')
+                        help='MMS solution which can be:trig, quartic, quadratic')
 
     args = parser.parse_args()
 
@@ -61,8 +61,12 @@ def main():
     quadmethod = args.quadmethod
     mesh = args.mesh
     MMS = args.MMS
+    edge = 'all'
 
-    F, K, M, B = FE.Assembly(MMS, mesh, nelx, nely, Q, quadmethod)
+    F1, K, M, B = FE.Assembly(MMS, mesh, nelx, nely, Q, quadmethod)
+
+    T = FE.GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge)
+    F = F1 - T
 
     dp, du = FE.GetFESol(K,F,nelx,nely)
     p, u = FE.GetExactSol(MMS, mesh, nelx, nely)
