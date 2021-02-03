@@ -619,7 +619,7 @@ class TestDivergenceNonUniform(unittest.TestCase):
     def test_Divergence4(self):
         nelx = 2
         nely = 5
-        #FE.plotmesh('nonuniform', nelx, nely)
+        FE.plotmesh('nonuniform', nelx, nely)
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()

@@ -11,7 +11,6 @@ import sys
 from sympy import *
 import matplotlib.pyplot as plt
 
-
 def Perm(x, y):
     """ permeability is consider 1 as given
     in MMS of AC paper.
@@ -1014,34 +1013,44 @@ def GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e):
     N_bc = np.zeros((8,Q))
     coord_E = GetCoordElem(mesh, nelx, nely, e)
 
+    x0 = coord_E[0][0]
+    y0 = coord_E[0][1]
+    x1 = coord_E[1][0]
+    y1 = coord_E[1][1]
+    x2 = coord_E[2][0]
+    y2 = coord_E[2][1]
+    x3 = coord_E[3][0]
+    y3 = coord_E[3][1]
+
     for i in range(Q):
         if edge == 'bottom':
             yhat = -1.
             xhat = q[i]
-            X, DF_E, J_E = BilinearMap(coord_E, [xhat, yhat])
-            je = math.sqrt(DF_E[0][0]*DF_E[0][0] + DF_E[1][0]*DF_E[1][0])
+            le = math.sqrt((x1-x0)**2 + (y1-y0)**2)
+            je = le/2
             n, X = GetNormal(coord_E, [0., -1.])
         elif edge == 'right':
             yhat = q[i]
             xhat = 1.
-            X, DF_E, J_E = BilinearMap(coord_E, [xhat, yhat])
-            je = math.sqrt(DF_E[0][1]*DF_E[0][1] + DF_E[1][1]*DF_E[1][1])
+            le = math.sqrt((x3-x1)**2 + (y3-y1)**2)
+            je = le/2
             n, X = GetNormal(coord_E, [1., 0.])
         elif edge == 'top':
             yhat = 1.
             xhat = q[i]
-            X, DF_E, J_E = BilinearMap(coord_E, [xhat, yhat])
-            je = math.sqrt(DF_E[0][0]*DF_E[0][0] + DF_E[1][0]*DF_E[1][0])
+            le = math.sqrt((x3-x2)**2 + (y3-y2)**2)
+            je = le/2
             n, X = GetNormal(coord_E, [0., 1.])
         elif edge == 'left':
             yhat = q[i]
             xhat = -1.
-            X, DF_E, J_E = BilinearMap(coord_E, [xhat, yhat])
-            je = math.sqrt(DF_E[0][1]*DF_E[0][1] + DF_E[1][1]*DF_E[1][1])
+            le = math.sqrt((x2-x0)**2 + (y2-y0)**2)
+            je = le/2
             n, X = GetNormal(coord_E, [-1., 0.])
         else:
             print("edge is not defined")
 
+        X, DF_E, J_E = BilinearMap(coord_E, [xhat, yhat])
         Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
         N_dot_n = np.dot(Nhat.T,n)
         N_bc[:,i] = N_dot_n[:]
@@ -1237,47 +1246,6 @@ def GetExactSol(MMS, mesh, nelx, nely):
     
     return p, u
 
-def PltSolution(mesh,nelx, nely, u, p, title1, title2, title3):
-
-    nen = 4
-    IENe, IENn = GetConnectivity(nelx, nely)
-    x , y = GetNodeCoord(mesh,nelx, nely)
-    LMu = GetLMu(nelx, nely)
-    numelem = nelx * nely
-    xx = []
-    yy = []
-    uux = []
-    uuy = []
-    pp = []
-    localnodes = [0, 2, 1, 3]
-    node_ux = [4,5,2,3]
-    node_uy = [0,6,1,7]
-    for i in range(numelem):
-        for j in range(nen):
-            xx.append(x[IENn[localnodes[j], i]])
-            yy.append(y[IENn[localnodes[j], i]])
-            uux.append(u[LMu[node_ux[j], i]])
-            uuy.append(u[LMu[node_uy[j], i]])
-            pp.append(p[i][0])
-
-    plt.tricontourf(np.array(xx).squeeze(),np.array(yy).squeeze(),np.array(uux).squeeze(),100, cmap=plt.get_cmap('coolwarm'))
-    plt.title(title1)
-    plt.colorbar()
-    plt.show()
-
-    plt.tricontourf(np.array(xx).squeeze(),np.array(yy).squeeze(),np.array(uuy).squeeze(),100, cmap=plt.get_cmap('coolwarm'))
-    plt.title(title2)
-    plt.colorbar()
-    plt.show()
-
-    plt.tricontourf(np.array(xx).squeeze(),np.array(yy).squeeze(),np.array(pp).squeeze(),100, cmap=plt.get_cmap('coolwarm'))
-    plt.title(title3)
-    plt.colorbar()
-    plt.show()
-
-    return
-
-
 def GetResidual(K,u,p, nelx, nely):
     U = np.block([[u],[p]])
     res = K @ U
@@ -1307,3 +1275,113 @@ def GetEigenvalue(M,B):
         l1.append(D[idx[i]])
 
     return l1
+
+
+def PopulateNode(mesh, nelx, nely):
+
+    in_nodex = nelx - 1
+    in_nodey = nely - 1
+    nnx = 2+2*in_nodex
+    nny = 2+2*in_nodey
+    x , y = GetNodeCoord(mesh,nelx, nely)
+    xx = x.reshape((nely+1,nelx+1))
+    yy = y.reshape((nely+1,nelx+1))
+    yy = yy.T
+    xx0 = np.array([xx[0,:]])
+    yy0 = np.array([yy[0,:]])
+    xx1 = np.zeros((0,nelx+1))
+    yy1 = np.zeros((0,nely+1))
+    for i in range(nny):
+        xx1 = np.append(xx1,xx0, axis=0)
+
+    for i in range(nnx):
+        yy1 = np.append(yy1,yy0, axis=0)
+
+    xx2 = xx1.T
+    yy2 = yy1.T
+    xx3 = np.zeros((nnx,nny))
+    xx3[0,:] = xx2[0,:]
+    xx3[nnx-1,:] = xx2[nelx,:]
+    for i in range(1,in_nodex+1):
+        xx3[2*i-1,:] = xx2[i,:]
+        xx3[2*i,:] = xx2[i,:]
+
+    yy3 = np.zeros((nny,nnx))
+    yy3[0,:] = yy2[0,:]
+    yy3[nny-1,:] = yy2[nely,:]
+    for i in range(1,in_nodey+1):
+        yy3[2*i-1,:] = yy2[i,:]
+        yy3[2*i,:] = yy2[i,:]
+
+    Y = yy3
+    X = xx3.T
+
+    return X , Y
+
+
+def PltSolution(mesh,nelx, nely, u, p, title1, title2, title3):
+
+    X , Y = PopulateNode(mesh,nelx, nely)
+    in_nodex = nelx - 1
+    in_nodey = nely - 1
+    nnx = 2+2*in_nodex
+    nny = 2+2*in_nodey
+    UUy = np.zeros((nely+1, nnx))
+    for j in range(0,nely+1):
+        for i in range(0,nnx):
+            UUy[j,i] = u[i+(2*(nelx+1)+2*nelx)*j]
+            
+    Uy = np.zeros((nny, nnx))
+    Uy[0,:] = UUy[0,:]
+    Uy[nny-1,:] = UUy[nely,:]
+    for i in range(1,in_nodey+1):
+        Uy[2*i-1,:] = UUy[i,:]
+        Uy[2*i,:] = UUy[i,:]
+
+    UUx = np.zeros((nny, nelx+1))
+    for k in range(nely):
+        for j in range(0,2):
+            l = j+k*2
+            for i in range(0,nelx+1):
+                UUx[l,i] = u[nnx + 2*i + j + k*(nnx*1+2*(nelx+1))]
+
+    Ux = np.zeros((nny, nnx))
+    Ux[:,0] = UUx[:,0]
+    Ux[:,nnx-1] = UUx[:,nelx]
+    for i in range(1,in_nodex+1):
+        Ux[:,2*i-1] = UUx[:,i]
+        Ux[:,2*i] = UUx[:,i]
+
+    PP = np.zeros((nny, nnx))
+    for j in range(0,nely):
+        for i in range(0,nelx):         
+            PP[2*j,2*i] = p[i + j*nelx]
+            PP[2*j,2*i+1] = p[i + j*nelx]
+            PP[2*j+1,2*i] = p[i + j*nelx]
+            PP[2*j+1,2*i+1] = p[i + j*nelx]
+
+    plt.contourf(X, Y, Ux, 100, cmap=plt.get_cmap('coolwarm'))
+    plt.colorbar()
+    plt.title(title1)
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.axis('equal')
+    plt.show()
+
+    plt.contourf(X, Y, Uy, 100, cmap=plt.get_cmap('coolwarm'))
+    plt.colorbar()
+    plt.title(title2)
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.axis('equal')
+    plt.show()
+
+    plt.contourf(X, Y, PP, 100, cmap=plt.get_cmap('coolwarm'))
+    plt.colorbar()
+    plt.title(title3)
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.axis('equal')
+    plt.show()
+
+    return
