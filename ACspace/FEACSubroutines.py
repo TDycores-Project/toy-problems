@@ -7,9 +7,9 @@ week form
 """
 import numpy as np
 import math
-import sys
-from sympy import *
 import matplotlib.pyplot as plt
+
+#-----------------------------MMS Solutions (start) ---------------------------------#
 
 def Perm(x, y):
     """ permeability is consider 1 as given
@@ -125,6 +125,8 @@ def ForcingTrig(x, y):
                        -k[1][1]*math.sin(math.pi*x)*math.sin(math.pi*y))
     f = vx_x + vy_y
     return f
+
+#-----------------------------MMS Solutions (end) ---------------------------------#
 
 def BilinearMap(coord_E, Xhat):
     """ 
@@ -268,9 +270,9 @@ def VondermondeMat(coord_E):
     ------
     coord_E: is the coordinate of vertices of element.
     Note
-    4---3
+    2---3
     |   |
-    1---2
+    0---1
     Output:
     ------
     VM: the 8x8 vondermonde matrix
@@ -391,7 +393,6 @@ def GetQuadrature(Q, quadmethod):
         q=x
     else:
         print("Error: quadmethod is wrong!Please enter 'GAUSS' or 'LGL'!")
-        sys.exit(1)
     
     return w, q
 
@@ -720,7 +721,9 @@ def GetGlobalNormal(mesh, nelx, nely, e):
     Tt = np.array([x3 - x2, y3 - y2])
     Lt = math.sqrt(Tt[0]**2 + Tt[1]**2)
     Tt = Tt/Lt
-
+    # do cross product with positive z-direction
+    # Normal for bottom and right edges are outward,
+    # and for top and left edges are inward
     k = np.array([0, 0, 1])
     nb = np.cross(Tb, k)
     Nb = np.array([nb[0], nb[1]])
@@ -732,6 +735,8 @@ def GetGlobalNormal(mesh, nelx, nely, e):
     Nt = np.array([nt[0], nt[1]])
 
     return Nb, Nr, Nl, Nt
+
+#---------------------------for testing div operator (start)-------------------------------#
 
 def GetVecUe(mesh, nelx, nely, e):
     """
@@ -765,6 +770,8 @@ def div_u():
     # if you changed u above update div(u) here
     # then run unit test
     return 2.
+
+#---------------------------for testing div operator (end)-------------------------------#
 
 def GetElementRestriction(mesh, nelx, nely, e):
     """
@@ -828,6 +835,8 @@ def GetSharedEdgeDof(nelx, nely):
 
     return sharededge
 
+#---------------------------for testing div operator (start)-------------------------------#
+
 def AssembleDivOperator(mesh, nelx, nely):
     """This function assembles div(u) and vector u.
     we test divergence operator on multiple elements
@@ -858,6 +867,7 @@ def AssembleDivOperator(mesh, nelx, nely):
         U[edgedof[i],0] = U[edgedof[i],0]/2
 
     return U, D
+#---------------------------for testing div operator (end)-------------------------------#
 
 
 def GetLocalMassMat(coord_E,Q,quadmethod):
@@ -903,7 +913,7 @@ def GetLocalMassMat(coord_E,Q,quadmethod):
 
     Me = N.T @ W @ N
 
-    return Me, N
+    return Me
 
 def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
     """This function returns the interpolation matrix at quadrature points
@@ -925,7 +935,8 @@ def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
     D = np.zeros((0,8))
     Nhatp = np.array([[1]])
     Np = np.zeros((0,1))
-    W = np.zeros((Q*Q,Q*Q))
+    W1 = np.zeros((Q*Q,Q*Q))
+    W2 = np.zeros((Q*Q,Q*Q))
     Fp = np.zeros((0,1))
     for i in range(Q):
             for j in range(Q):
@@ -956,11 +967,12 @@ def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
                 Fp = np.append(Fp,fp,axis=0)
                 Dhat = GetDivACNodalBasis(coord_E)
                 D = np.append(D,Dhat, axis=0)
-                W[j+Q*i][j+Q*i] = ww*J_E
+                W1[j+Q*i][j+Q*i] = ww*J_E
+                W2[j+Q*i][j+Q*i] = ww*J_E
                 Np = np.append(Np,Nhatp,axis=0)
 
-    Fpe = Np.T @ W @ Fp
-    Be = Np.T @ W @ D
+    Fpe = Np.T @ W2 @ Fp
+    Be = Np.T @ W1 @ D
 
     return Be, Fpe
 
@@ -981,7 +993,7 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
         L = GetElementRestriction(mesh, nelx, nely, e)
         # get discretized vector u for element e
         CoordElem = GetCoordElem(mesh, nelx, nely, e)
-        Me, N = GetLocalMassMat(CoordElem,Q,quadmethod)
+        Me = GetLocalMassMat(CoordElem,Q,quadmethod)
         Be, Fpe = GetLocalDivANDForcing(MMS, CoordElem,Q,quadmethod)
         
         # assemble U
@@ -1150,7 +1162,7 @@ def GetFESol(K,F,nelx,nely):
 
 def GetUexact(MMS, mesh, nelx, nely, e):
     """
-    This function discretize the vector u = [x-y, x+y] on element e
+    This function discretize the vector u on element e
     This for testing divergence operator
     """
     CoordElem = GetCoordElem(mesh, nelx, nely, e)
@@ -1190,12 +1202,7 @@ def GetUexact(MMS, mesh, nelx, nely, e):
     return ue
 
 def GetExactSol(MMS, mesh, nelx, nely):
-    """ based on sec. 6 AC paper 2016
-    p(x,y) = sin(pi*x)*sin(pi*y)
-    ux(x,y) = -pi*cos(pi*x)*sin(pi*y)
-    uy(x,y) = -pi*sin(pi*x)*cos(pi*y)
-    Note permeability is 1
-    """
+
     numelem = nelx*nely
     LMu = GetLMu(nelx, nely)
     ndof = np.amax(LMu) + 1
@@ -1242,7 +1249,7 @@ def GetExactSol(MMS, mesh, nelx, nely):
                 pe = PressureConstant(x, y)
                 p[i][0] = pe
             else:
-                print('ENter MMS solution, trig, quartic or quadratic')
+                print('ENter MMS solution, trig, quartic, quadratic, linear or constant')
     
     return p, u
 
@@ -1278,11 +1285,34 @@ def GetEigenvalue(M,B):
 
 
 def PopulateNode(mesh, nelx, nely):
+    """This function populates the nodes we have for plotting purpose
+    note that GetNodeCoord returns the coordinate of for example
+    6----7----8
+    |    |    |
+    3----4----5          (A)
+    |    |    |
+    0----1----2
 
+    Now we create 
+    6----7----8
+    |    ||   |
+    3====4====5          (B)
+    |    ||   |
+    0----1----2
+    we duplicate the interior edges since we have dof on edge NOT node for ploting.
+
+    Output:
+    -------
+    X, Y: meshgrid of coordinates of nodes in B for contourplot
+    """
+    # interior nodes in x direction
     in_nodex = nelx - 1
+    # interior nodes in y direction
     in_nodey = nely - 1
+    # number of total new nodes we have (duplicating the interior nodes)
     nnx = 2+2*in_nodex
     nny = 2+2*in_nodey
+    # this functions gives coordinate of nodes (A)
     x , y = GetNodeCoord(mesh,nelx, nely)
     xx = x.reshape((nely+1,nelx+1))
     yy = y.reshape((nely+1,nelx+1))
