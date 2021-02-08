@@ -782,7 +782,7 @@ def GetElementRestriction(mesh, nelx, nely, e):
 def GetSharedEdgeDof(nelx, nely):
     """
     This function returns the global dof on shared edge.
-    In assembly when we add dof in shared edges, we need to divide it by 2, to avoid
+    In projection of exact vector u, in shared edges, we need to divide it by 2, to avoid
     counting a vector dof twice.
     """
     LMu = GetLMu(nelx, nely)
@@ -812,7 +812,9 @@ def GetLocalMassMat(coord_E,Q,quadmethod):
     """This function returns the interpolation matrix at quadrature points
     N and mass matrix Me = N^T*W*N (interpolation of (v,K^{-1}*u)), where
     W = diag(W1,W2,...Wq) and Wi = wi*K^{-1} where K^{-1} is inverse of permeability matrix
-    Wi is 2x2 matrix.
+    Wi is 2x2 matrix. and 
+    N: Nodal basis evaluated at quadrature points
+    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
 
     Input:
     ------
@@ -823,9 +825,6 @@ def GetLocalMassMat(coord_E,Q,quadmethod):
 
     Output:
     -------
-    N: Nodal basis evaluated at quadrature points
-    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
-
     Me: the nodal interpolation matrix computed at quadrature points
     shape (8,8), 
     """
@@ -915,8 +914,7 @@ def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
 
 
 def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
-    """This function assembles div(u) and vector u.
-    we test divergence operator on multiple elements
+    """This function assembles M=(v,kinv*u), B=(q,div(u)) and Fp=(q,f)
     """
     numelem = nelx*nely
     LMu = GetLMu(nelx, nely)
@@ -938,13 +936,6 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
         # assemble Divergence
         B[e,:] = (-1*Be) @ L
         Fp[e,:] = (-1*Fpe)
-
-    # divide those repeated dof in shared edges by 2
-    edgedof = GetSharedEdgeDof(nelx, nely)
-    for i in range(len(edgedof)):
-        for j in range(len(edgedof)):
-            M[edgedof[i],edgedof[j]] = M[edgedof[i],edgedof[j]]/2
-
 
     P = np.zeros((numelem,numelem))
     K = np.block([[M, B.T],[B, P]])
@@ -1081,7 +1072,9 @@ def GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge):
 
 
 def GetFESol(K,F,nelx,nely):
-
+    """
+    This function returns the FE global u and p
+    """
     d = np.linalg.solve(K, F)
     LMu = GetLMu(nelx, nely)
     ndof = np.amax(LMu) + 1
@@ -1100,7 +1093,6 @@ def GetFESol(K,F,nelx,nely):
 def GetUexact(MMS, mesh, nelx, nely, e):
     """
     This function discretize the vector u on element e
-    This for testing divergence operator
     """
     CoordElem = GetCoordElem(mesh, nelx, nely, e)
 
@@ -1139,7 +1131,9 @@ def GetUexact(MMS, mesh, nelx, nely, e):
     return ue
 
 def GetExactSol(MMS, mesh, nelx, nely):
-
+    """
+    This function returns the global exact u and p
+    """
     numelem = nelx*nely
     LMu = GetLMu(nelx, nely)
     ndof = np.amax(LMu) + 1
@@ -1472,7 +1466,8 @@ def GetLocalVecExcact(coord_E,Q,quadmethod):
 
 
 def AssemblyTestMass(mesh, nelx, nely, Q, quadmethod):
-    """This function assembles 
+    """This function assembles (v,kinv*uh) = (v,kinv*ue) or M*du = V,
+    then we compare du with projection of exact solution U
     """
     numelem = nelx*nely
     LMu = GetLMu(nelx, nely)
@@ -1501,11 +1496,9 @@ def AssemblyTestMass(mesh, nelx, nely, Q, quadmethod):
         U = U + L.T @ Ue
 
     # divide those repeated dof in shared edges by 2
+    # only the projection of exact solution
     edgedof = GetSharedEdgeDof(nelx, nely)
     for i in range(len(edgedof)):
-        V[edgedof[i],0] = V[edgedof[i],0]/2
         U[edgedof[i],0] = U[edgedof[i],0]/2
-        for j in range(len(edgedof)):
-            M[edgedof[i],edgedof[j]] = M[edgedof[i],edgedof[j]]/2
 
     return M, V, U

@@ -786,6 +786,20 @@ class TestGlobalMassMat(unittest.TestCase):
         for i in range(len(dU)):
             self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
 
+    def test_GlobalMass2(self):
+        quadmethod = 'GAUSS'
+        Q = 2
+        mesh = 'uniform'
+        nelx = 2
+        nely = 3
+        M, V, U = FE.AssemblyTestMass(mesh, nelx, nely, Q, quadmethod)
+        dU = np.linalg.solve(M, V)
+        norm_U = np.linalg.norm(dU-U)
+        print('Error of Global mass test:',norm_U)
+        print(U.T)
+        print(dU.T)
+        for i in range(len(dU)):
+            self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
 
 def main():
     unittest.main()
