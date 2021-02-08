@@ -305,7 +305,7 @@ class TestDivNodalBasisUniform(unittest.TestCase):
         for i in range(8):
             x = nodes[2*i]
             y = nodes[2*i+1]
-            u[i][0] = np.dot([-y,x],normals[i,:])
+            u[i][0] = np.dot([-3*y**2,-2*x],normals[i,:])
 
         const = Dhat @ u
         self.assertAlmostEqual(const[0][0],0.0, None, None,1e-10)
@@ -362,7 +362,7 @@ class TestDivNodalBasisNonUniform(unittest.TestCase):
         for i in range(8):
             x = nodes[2*i]
             y = nodes[2*i+1]
-            u[i][0] = np.dot([-y,x],normals[i,:])
+            u[i][0] = np.dot([2*y,1-2*x],normals[i,:])
 
         const = Dhat @ u
         self.assertAlmostEqual(const[0][0],0.0, None, None,1e-10)
@@ -619,7 +619,7 @@ class TestDivergenceNonUniform(unittest.TestCase):
     def test_Divergence4(self):
         nelx = 2
         nely = 5
-        FE.plotmesh('nonuniform', nelx, nely)
+        #FE.plotmesh('nonuniform', nelx, nely)
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
@@ -721,6 +721,70 @@ class TestDivergenceRandom(unittest.TestCase):
         # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
+
+
+class TestLocalMassMat(unittest.TestCase):
+
+    def test_localMass1(self):
+        """
+            for 2x1 mesh we test mass matrix for each element
+        """
+        quadmethod = 'GAUSS'
+        Q = 2
+        mesh = 'uniform'
+        nelx = 2
+        nely = 1
+        # test for first element
+        for e in range(nelx*nely):
+            e = 0
+            ue = FE.GetVecUe(mesh, nelx, nely, e)
+            CoordElem = FE.GetCoordElem(mesh, nelx, nely, e)
+            Ve = FE.GetLocalVecExcact(CoordElem,Q,quadmethod)
+            Me = FE.GetLocalMassMat(CoordElem,Q,quadmethod)
+            du = np.linalg.solve(Me, Ve)
+            norm_u = np.linalg.norm(du-ue)
+            print('Error of local mass test on 2x1 mesh:',norm_u)
+            for i in range(len(du)):
+                self.assertAlmostEqual(du[i][0], ue[i][0], None, None, 1e-10)
+
+
+    def test_localMass2(self):
+        """
+        for 1x5 mesh, we test mass matrix for each element
+        """
+        quadmethod = 'GAUSS'
+        Q = 2
+        mesh = 'uniform'
+        nelx = 1
+        nely = 5
+        for e in range(nelx*nely):
+            ue = FE.GetVecUe(mesh, nelx, nely, e)
+            CoordElem = FE.GetCoordElem(mesh, nelx, nely, e)
+            Ve = FE.GetLocalVecExcact(CoordElem,Q,quadmethod)
+            Me = FE.GetLocalMassMat(CoordElem,Q,quadmethod)
+            du = np.linalg.solve(Me, Ve)
+            norm_u = np.linalg.norm(du-ue)
+            print('Error of local mass on 1x5 mesh:',norm_u)
+            for i in range(len(du)):
+                self.assertAlmostEqual(du[i][0], ue[i][0], None, None, 1e-10)
+
+
+class TestGlobalMassMat(unittest.TestCase):
+
+    def test_GlobalMass1(self):
+        quadmethod = 'GAUSS'
+        Q = 2
+        mesh = 'uniform'
+        nelx = 2
+        nely = 1
+        M, V, U = FE.AssemblyTestMass(mesh, nelx, nely, Q, quadmethod)
+        dU = np.linalg.solve(M, V)
+        norm_U = np.linalg.norm(dU-U)
+        print('Error of Global mass test:',norm_U)
+        print(U.T)
+        print(dU.T)
+        for i in range(len(dU)):
+            self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
 
 
 def main():
