@@ -546,7 +546,6 @@ class TestDivergenceUniform(unittest.TestCase):
         U, D = FE.AssembleDivOperator('uniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -556,7 +555,6 @@ class TestDivergenceUniform(unittest.TestCase):
         U, D = FE.AssembleDivOperator('uniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -566,7 +564,6 @@ class TestDivergenceUniform(unittest.TestCase):
         U, D = FE.AssembleDivOperator('uniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -577,7 +574,8 @@ class TestDivergenceUniform(unittest.TestCase):
         U, D = FE.AssembleDivOperator('uniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 9x7 uniform mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
     
@@ -592,7 +590,8 @@ class TestDivergenceNonUniform(unittest.TestCase):
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 3x1 nonuniform mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -602,7 +601,8 @@ class TestDivergenceNonUniform(unittest.TestCase):
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 3x2 nonuniform mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -612,7 +612,8 @@ class TestDivergenceNonUniform(unittest.TestCase):
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 3x3 nonuniform mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -623,7 +624,8 @@ class TestDivergenceNonUniform(unittest.TestCase):
         U, D = FE.AssembleDivOperator('nonuniform', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 2x5 nonuniform mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -638,7 +640,8 @@ class TestDivergenceStretched(unittest.TestCase):
         U, D = FE.AssembleDivOperator('stretched', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 3x1 stretched mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -648,7 +651,8 @@ class TestDivergenceStretched(unittest.TestCase):
         U, D = FE.AssembleDivOperator('stretched', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 3x2 stretched mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -658,7 +662,8 @@ class TestDivergenceStretched(unittest.TestCase):
         U, D = FE.AssembleDivOperator('stretched', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 3x3 stretched mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -669,7 +674,8 @@ class TestDivergenceStretched(unittest.TestCase):
         U, D = FE.AssembleDivOperator('stretched', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 2x5 stretched mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -685,7 +691,8 @@ class TestDivergenceRandom(unittest.TestCase):
         U, D = FE.AssembleDivOperator('random', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 3x2 random mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -696,7 +703,8 @@ class TestDivergenceRandom(unittest.TestCase):
         U, D = FE.AssembleDivOperator('random', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 3x4 random mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -707,18 +715,21 @@ class TestDivergenceRandom(unittest.TestCase):
         U, D = FE.AssembleDivOperator('random', nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 4x4 random mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
     def test_Divergence4(self):
         nelx = 3
         nely = 6
-        #FE.plotmesh('random', nelx, nely)
-        U, D = FE.AssembleDivOperator('random', nelx, nely)
+        mesh = 'random'
+        #FE.plotmesh(mesh, nelx, nely)
+        U, D = FE.AssembleDivOperator(mesh, nelx, nely)
         Div = D @ U
         d = FE.div_u()
-        # in GetVecUe function velocity is u = [x-y,x+y] ==> div(u) = 2
+        norm_d = np.linalg.norm(d-Div)
+        print('Error of Assembled divergence test on 3x6 random mesh:',norm_d)
         for i in range(len(Div)):
             self.assertAlmostEqual(Div[i][0], d, None, None, 1e-10)
 
@@ -742,8 +753,8 @@ class TestLocalMassMat(unittest.TestCase):
             Ve = FE.GetLocalVecExcact(CoordElem,Q,quadmethod)
             Me = FE.GetLocalMassMat(CoordElem,Q,quadmethod)
             du = np.linalg.solve(Me, Ve)
-            norm_u = np.linalg.norm(du-ue)
-            print('Error of local mass test on 2x1 mesh:',norm_u)
+            #norm_u = np.linalg.norm(du-ue)
+            #print('Error of local mass test on 2x1 mesh:',norm_u)
             for i in range(len(du)):
                 self.assertAlmostEqual(du[i][0], ue[i][0], None, None, 1e-10)
 
@@ -763,15 +774,15 @@ class TestLocalMassMat(unittest.TestCase):
             Ve = FE.GetLocalVecExcact(CoordElem,Q,quadmethod)
             Me = FE.GetLocalMassMat(CoordElem,Q,quadmethod)
             du = np.linalg.solve(Me, Ve)
-            norm_u = np.linalg.norm(du-ue)
-            print('Error of local mass on 1x5 mesh:',norm_u)
+            #norm_u = np.linalg.norm(du-ue)
+            #print('Error of local mass on one element:',norm_u)
             for i in range(len(du)):
                 self.assertAlmostEqual(du[i][0], ue[i][0], None, None, 1e-10)
 
 
-class TestGlobalMassMat(unittest.TestCase):
+class TestGlobalMassMatUniform(unittest.TestCase):
 
-    def test_GlobalMass1(self):
+    def test_GlobalMassuniform1(self):
         quadmethod = 'GAUSS'
         Q = 2
         mesh = 'uniform'
@@ -779,27 +790,118 @@ class TestGlobalMassMat(unittest.TestCase):
         nely = 1
         M, V, U = FE.AssemblyTestMass(mesh, nelx, nely, Q, quadmethod)
         dU = np.linalg.solve(M, V)
-        norm_U = np.linalg.norm(dU-U)
-        print('Error of Global mass test:',norm_U)
-        print(U.T)
-        print(dU.T)
+        #norm_U = np.linalg.norm(dU-U)
+        #print('Error of Assembled mass test on 2x1 uniform mesh:',norm_U)
         for i in range(len(dU)):
             self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
 
-    def test_GlobalMass2(self):
+    def test_GlobalMassuniform2(self):
         quadmethod = 'GAUSS'
         Q = 2
         mesh = 'uniform'
-        nelx = 2
+        nelx = 4
         nely = 3
+        #FE.plotmesh(mesh, nelx, nely)
         M, V, U = FE.AssemblyTestMass(mesh, nelx, nely, Q, quadmethod)
         dU = np.linalg.solve(M, V)
         norm_U = np.linalg.norm(dU-U)
-        print('Error of Global mass test:',norm_U)
-        print(U.T)
-        print(dU.T)
+        print('Error of Assembled mass test on 4x3 uniform mesh:',norm_U)
         for i in range(len(dU)):
             self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
+
+
+class TestGlobalMassMatNonUniform(unittest.TestCase):
+
+    def test_GlobalMassnonuniform1(self):
+        quadmethod = 'GAUSS'
+        Q = 2
+        mesh = 'nonuniform'
+        nelx = 1
+        nely = 3
+        #FE.plotmesh(mesh, nelx, nely)
+        M, V, U = FE.AssemblyTestMass(mesh, nelx, nely, Q, quadmethod)
+        dU = np.linalg.solve(M, V)
+        norm_U = np.linalg.norm(dU-U)
+        print('Error of Assembled mass test on 1x3 nonuniform mesh:',norm_U)
+        for i in range(len(dU)):
+            self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
+
+    def test_GlobalMassnonuniform2(self):
+        quadmethod = 'GAUSS'
+        Q = 2
+        mesh = 'nonuniform'
+        nelx = 5
+        nely = 3
+        #FE.plotmesh(mesh, nelx, nely)
+        M, V, U = FE.AssemblyTestMass(mesh, nelx, nely, Q, quadmethod)
+        dU = np.linalg.solve(M, V)
+        norm_U = np.linalg.norm(dU-U)
+        print('Error of Assembled mass test on 5x3 nonuniform mesh:',norm_U)
+        for i in range(len(dU)):
+            self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
+
+
+class TestGlobalMassMatStretched(unittest.TestCase):
+
+    def test_GlobalMassstretched1(self):
+        quadmethod = 'GAUSS'
+        Q = 2
+        mesh = 'stretched'
+        nelx = 2
+        nely = 3
+        #FE.plotmesh(mesh, nelx, nely)
+        M, V, U = FE.AssemblyTestMass(mesh, nelx, nely, Q, quadmethod)
+        dU = np.linalg.solve(M, V)
+        norm_U = np.linalg.norm(dU-U)
+        print('Error of Assembled mass test on 2x3 stretched mesh:',norm_U)
+        for i in range(len(dU)):
+            self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
+
+    def test_GlobalMassstretched2(self):
+        quadmethod = 'GAUSS'
+        Q = 2
+        mesh = 'stretched'
+        nelx = 2
+        nely = 5
+        #FE.plotmesh(mesh, nelx, nely)
+        M, V, U = FE.AssemblyTestMass(mesh, nelx, nely, Q, quadmethod)
+        dU = np.linalg.solve(M, V)
+        norm_U = np.linalg.norm(dU-U)
+        print('Error of Assembled mass test on 2x5 stretched mesh:',norm_U)
+        for i in range(len(dU)):
+            self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
+
+
+class TestGlobalMassMatRandom(unittest.TestCase):
+
+    def test_GlobalMassrandom1(self):
+        quadmethod = 'GAUSS'
+        Q = 2
+        mesh = 'random'
+        nelx = 4
+        nely = 3
+        #FE.plotmesh(mesh, nelx, nely)
+        M, V, U = FE.AssemblyTestMass(mesh, nelx, nely, Q, quadmethod)
+        dU = np.linalg.solve(M, V)
+        norm_U = np.linalg.norm(dU-U)
+        print('Error of Assembled mass test on 4x3 random mesh:',norm_U)
+        for i in range(len(dU)):
+            self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
+
+    def test_GlobalMassrandom2(self):
+        quadmethod = 'GAUSS'
+        Q = 2
+        mesh = 'random'
+        nelx = 6
+        nely = 5
+        #FE.plotmesh(mesh, nelx, nely)
+        M, V, U = FE.AssemblyTestMass(mesh, nelx, nely, Q, quadmethod)
+        dU = np.linalg.solve(M, V)
+        norm_U = np.linalg.norm(dU-U)
+        print('Error of Assembled mass test on 6x5 random mesh:',norm_U)
+        for i in range(len(dU)):
+            self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
+
 
 def main():
     unittest.main()
