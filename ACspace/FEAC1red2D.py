@@ -1,17 +1,17 @@
 """ how to run
-python3 FEAC1red2D.py --nelx 4 --nely 4 --Q 2 --quadmethod 'GAUSS' --mesh 'uniform'
+python3 FEAC1red2D.py --nelx 4 --nely 4 --Q 2 --quadmethod GAUSS --mesh uniform --MMS quartic
 if you run with 
 python3 FEAC1red2D.py
 uses the default values as
 nelx=4
 nely=4
 Q=2
-quadmethod='GAUSS'
-mesh='uniform
+quadmethod=GAUSS
+mesh=uniform
+MMS = quartic
 """
 import FEACSubroutines as FE
 import argparse
-import matplotlib.pyplot as plt
 import numpy as np
 
 def main():
@@ -74,19 +74,19 @@ def main():
 
     error_u = np.absolute(du-u)
     error_p = np.absolute(dp-p)
-    normerror_u = np.linalg.norm(du-u)
-    normerror_p = np.linalg.norm(dp-p)
-    print("norm of error of velocity is: ",normerror_u)
-    print("norm of error of pressure is: ",normerror_p)
+    normerror_u = np.linalg.norm(du-u)/np.linalg.norm(u)
+    normerror_p = np.linalg.norm(dp-p)/np.linalg.norm(p)
+    print("Velocity and Pressure Absolute Error:",normerror_u, normerror_p)
+    #print("Absolute pressure's error: ",normerror_p)
 
-    l = FE.GetEigenvalue(M, B)
-    print("Eigenvalues of B*M^{-1}*B^T:")
-    print(l)
+    #l = FE.GetEigenvalue(M, B)
+    #print("Eigenvalues of B*M^{-1}*B^T:")
+    #print(l)
 
-    FE.PltSolution(mesh, nelx, nely, du, dp, 'ux_h','uy_h','p_h' )
-    FE.PltSolution(mesh, nelx, nely, u, p,'ux_ex','uy_ex','p_ex')
-    FE.PltSolution(mesh, nelx, nely, error_u, error_p,'abs(ux_ex - ux_h)', 'abs(uy_ex - uy_h)', 'abs(p_ex - p_h)')
-    FE.PltSolution(mesh, nelx, nely, res_u, res_p, 'res_ux','res_uy','res_p')
+    #FE.PltSolution(mesh, nelx, nely, du, dp, 'ux_h','uy_h','p_h' )
+    #FE.PltSolution(mesh, nelx, nely, u, p,'ux_ex','uy_ex','p_ex')
+    #FE.PltSolution(mesh, nelx, nely, error_u, error_p,'abs(ux_ex - ux_h)', 'abs(uy_ex - uy_h)', 'abs(p_ex - p_h)')
+    #FE.PltSolution(mesh, nelx, nely, res_u, res_p, 'res_ux','res_uy','res_p')
 
     return
 
