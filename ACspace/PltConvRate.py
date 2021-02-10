@@ -33,8 +33,8 @@ def plot():
 
     ax.loglog(h, E_p, 'o', color='blue')
     ax.loglog(h, E_u, 'o', color='black')
-    ax.loglog(h, H1, '--', color='blue', label='Pressure O(h^1)')
-    ax.loglog(h, H2, '--', color='black', label='Velocity O(h^2)')
+    ax.loglog(h, H1, '--', color='blue', label='Pressure O(h)')
+    ax.loglog(h, H2, '--', color='black', label='Velocity O(h$^2$)')
 
     ax.legend(loc='best')
     ax.set_xlabel('h')
