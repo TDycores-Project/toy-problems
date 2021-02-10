@@ -28,17 +28,13 @@ def plot():
     E_u = data['u_error']
     E_p = data['p_error']
     h = 1/data['mesh_res']
-    H1 =  E_p[0]* (h/h[0]) # H = C h^p
-    H2 =  E_u[0]* (h/h[0])**2
-    log_h = np.log10(h)
-    log_H1 = np.log10(H1)
-    log_H2 = np.log10(H2)
+    H1 =  E_p[0]* (h/h[0]) # H = C h^1
+    H2 =  E_u[0]* (h/h[0])**2  # H = C h^2
+
     ax.loglog(h, E_p, 'o', color='blue')
     ax.loglog(h, E_u, 'o', color='black')
-    m, b = np.polyfit(log_h, log_H1, 1)
-    n, c = np.polyfit(log_h, log_H2, 1)
-    ax.loglog(h, 10**b * h**m, '--', color='blue', label='Pressure O(h^1)')
-    ax.loglog(h, 10**c * h**n, '--', color='black', label='Velocity O(h^2)')
+    ax.loglog(h, H1, '--', color='blue', label='Pressure O(h^1)')
+    ax.loglog(h, H2, '--', color='black', label='Velocity O(h^2)')
 
     ax.legend(loc='best')
     ax.set_xlabel('h')
