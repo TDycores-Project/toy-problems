@@ -966,25 +966,33 @@ def GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e):
         if edge == 'bottom':
             yhat = -1.
             xhat = q[i]
+            # edge length
             le = math.sqrt((x1-x0)**2 + (y1-y0)**2)
+            # Jacobian
             je = le/2
             n, X = GetNormal(coord_E, [0., -1.])
         elif edge == 'right':
             yhat = q[i]
             xhat = 1.
+            # edge length
             le = math.sqrt((x3-x1)**2 + (y3-y1)**2)
+            # Jacobian
             je = le/2
             n, X = GetNormal(coord_E, [1., 0.])
         elif edge == 'top':
             yhat = 1.
             xhat = q[i]
+            # edge length
             le = math.sqrt((x3-x2)**2 + (y3-y2)**2)
+            # Jacobian
             je = le/2
             n, X = GetNormal(coord_E, [0., 1.])
         elif edge == 'left':
             yhat = q[i]
             xhat = -1.
+            # edge length
             le = math.sqrt((x2-x0)**2 + (y2-y0)**2)
+            # Jacobian
             je = le/2
             n, X = GetNormal(coord_E, [-1., 0.])
         else:
@@ -1048,6 +1056,7 @@ def GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge):
             d1 = LMu[4,e]
             d2 = LMu[5,e]
             t = GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e)
+            # since the Global dof on left is in oppsite direction of local dof
             T[d1][0] = -t[4][0]
             T[d2][0] = -t[5][0]
 
@@ -1056,6 +1065,7 @@ def GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge):
             d1 = LMu[6,e]
             d2 = LMu[7,e]
             t = GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e)
+            # since the Global dof on left is in oppsite direction of local dof
             T[d1][0] = -t[6][0]
             T[d2][0] = -t[7][0]
 
@@ -1247,38 +1257,21 @@ def PopulateNode(mesh, nelx, nely):
     x , y = GetNodeCoord(mesh,nelx, nely)
     xx = x.reshape((nely+1,nelx+1))
     yy = y.reshape((nely+1,nelx+1))
-    yy = yy.T
-    xx0 = np.array([xx[0,:]])
-    yy0 = np.array([yy[0,:]])
-    xx1 = np.zeros((0,nelx+1))
-    yy1 = np.zeros((0,nely+1))
-    for i in range(nny):
-        xx1 = np.append(xx1,xx0, axis=0)
 
-    for i in range(nnx):
-        yy1 = np.append(yy1,yy0, axis=0)
+    X = np.zeros((nny,nnx))
+    Y = np.zeros((nny,nnx))
+    for j in range(nely):
+        for i in range(nelx):
+            X[2*j,2*i] = xx[j,i]
+            X[2*j,2*i+1] = xx[j,i+1]
+            X[2*j+1,2*i] = xx[j+1,i]
+            X[2*j+1,2*i+1] = xx[j+1,i+1]
+            Y[2*j,2*i] = yy[j,i]
+            Y[2*j,2*i+1] = yy[j,i+1]
+            Y[2*j+1,2*i] = yy[j+1,i]
+            Y[2*j+1,2*i+1] = yy[j+1,i+1]
 
-    xx2 = xx1.T
-    yy2 = yy1.T
-    xx3 = np.zeros((nnx,nny))
-    xx3[0,:] = xx2[0,:]
-    xx3[nnx-1,:] = xx2[nelx,:]
-    for i in range(1,in_nodex+1):
-        xx3[2*i-1,:] = xx2[i,:]
-        xx3[2*i,:] = xx2[i,:]
-
-    yy3 = np.zeros((nny,nnx))
-    yy3[0,:] = yy2[0,:]
-    yy3[nny-1,:] = yy2[nely,:]
-    for i in range(1,in_nodey+1):
-        yy3[2*i-1,:] = yy2[i,:]
-        yy3[2*i,:] = yy2[i,:]
-
-    Y = yy3
-    X = xx3.T
-
-    return X , Y
-
+    return X, Y
 
 def PltSolution(mesh,nelx, nely, u, p, title1, title2, title3):
 
