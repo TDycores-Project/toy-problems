@@ -51,8 +51,13 @@ def main():
                         dest='MMS',
                         type=str,
                         default='quartic',
-                        help='MMS solution which can be:trig, quartic, quadratic')
+                        help='MMS solution which can be:trig, quartic, quadratic, linear, constant')
 
+    parser.add_argument('--problem',
+                        dest='problem',
+                        type=str,
+                        default='convrate',
+                        help='run convergence rate problem')
     args = parser.parse_args()
 
     nelx = args.nelx
@@ -61,27 +66,31 @@ def main():
     quadmethod = args.quadmethod
     mesh = args.mesh
     MMS = args.MMS
+    problem = args.problem
     edge = 'all'
 
-    F1, K, M, B = FE.Assembly(MMS, mesh, nelx, nely, Q, quadmethod)
+    if problem == 'convrate':
+        F1, K = FE.Assembly(MMS, mesh, nelx, nely, Q, quadmethod)
 
-    T = FE.GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge)
-    F = F1 - T
+        T = FE.GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge)
+        F = F1 - T
 
-    dp, du = FE.GetFESol(K,F,nelx,nely)
-    p, u = FE.GetExactSol(MMS, mesh, nelx, nely)
-    res_p, res_u = FE.GetResidual(K,u,p, nelx, nely)
+        dp, du = FE.GetFESol(K,F,nelx,nely)
+        p, u = FE.GetExactSol(MMS, mesh, nelx, nely)
+        #res_p, res_u = FE.GetResidual(K,u,p, nelx, nely)
 
-    error_u = np.absolute(du-u)
-    error_p = np.absolute(dp-p)
-    normerror_u = np.linalg.norm(du-u)/np.linalg.norm(u)
-    normerror_p = np.linalg.norm(dp-p)/np.linalg.norm(p)
-    print("Velocity and Pressure Absolute Error:",normerror_u, normerror_p)
-    #print("Absolute pressure's error: ",normerror_p)
+        #error_u = np.absolute(du-u)
+        #error_p = np.absolute(dp-p)
+        normerror_u = np.linalg.norm(du-u)/np.linalg.norm(u)
+        normerror_p = np.linalg.norm(dp-p)/np.linalg.norm(p)
+    
+        print("Velocity and Pressure Absolute Error:",normerror_u, normerror_p)
+    
+    if problem == 'infsup':
+        H, B, C = FE.GetGlobalInfSupMat(MMS, mesh, nelx, nely, Q, quadmethod)
+        beta, l = FE.GetInfSupConst(H, B, C)
+        print("infsup constant:", beta)
 
-    #l = FE.GetEigenvalue(M, B)
-    #print("Eigenvalues of B*M^{-1}*B^T:")
-    #print(l)
 
     #FE.PltSolution(mesh, nelx, nely, du, dp, 'ux_h','uy_h','p_h' )
     #FE.PltSolution(mesh, nelx, nely, u, p,'ux_ex','uy_ex','p_ex')
