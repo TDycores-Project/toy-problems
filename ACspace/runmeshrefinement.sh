@@ -1,5 +1,6 @@
 #!/bin/bash
 declare -A run_flags
+    run_flags[problem]=convrate
     run_flags[nelx]=4
     run_flags[nely]=4
     run_flags[MMS]=quartic
