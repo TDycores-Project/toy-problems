@@ -8,6 +8,7 @@ week form
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import scipy.linalg
 
 #================================== MMS Solutions (start) ====================================#
 
@@ -871,8 +872,7 @@ def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
     D = np.zeros((0,8))
     Nhatp = np.array([[1]])
     Np = np.zeros((0,1))
-    WF = np.zeros((Q*Q,Q*Q))
-    WB = np.zeros((Q*Q,Q*Q))
+    W = np.zeros((Q*Q,Q*Q))
     Fp = np.zeros((0,1))
     for i in range(Q):
         for j in range(Q):
@@ -904,11 +904,13 @@ def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
             Dhat = GetDivACNodalBasis(coord_E)
             D = np.append(D,Dhat, axis=0)
             Np = np.append(Np,Nhatp,axis=0)
-            WF[j+Q*i][j+Q*i] = ww*J_E
-            WB[j+Q*i][j+Q*i] = ww*J_E
+            W[j+Q*i][j+Q*i] = ww*J_E
 
-    Fpe = Np.T @ WF @ Fp
-    Be = Np.T @ WB @ D
+    Fpe = Np.T @ W @ Fp
+    Be = Np.T @ W @ D
+    # I need div for infsup test
+    div = D.T @ W @ D
+    C = Np.T @ W @ Np
 
     return Be, Fpe
 
@@ -922,7 +924,7 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
     Fp = np.zeros((numelem, 1))
     M = np.zeros((ndof,ndof))
     B = np.zeros((numelem, ndof))
-    
+
     for e in range(numelem):
         # get element restriction operator L for element e
         L = GetElementRestriction(mesh, nelx, nely, e)
@@ -933,7 +935,7 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
         
         # assemble M
         M = M + L.T @ Me @ L
-        # assemble Divergence
+        # assemble B
         B[e,:] = (-1*Be) @ L
         Fp[e,:] = (-1*Fpe)
 
@@ -942,7 +944,7 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
     Fu = np.zeros((ndof,1))
     F = np.block([[Fu],[Fp]])
 
-    return F, K, M, B
+    return F, K
 
 
 def GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e):
@@ -1340,6 +1342,7 @@ def PltSolution(mesh,nelx, nely, u, p, title1, title2, title3):
 
     return
 
+
 #============================= for testing div operator (start) ===============================#
 
 def uexact(x,y):
@@ -1417,12 +1420,9 @@ def AssembleDivOperator(mesh, nelx, nely):
         U[edgedof[i],0] = U[edgedof[i],0]/2
 
     return U, D
-#============================= for testing div operator (end) ===============================#
 
 
 #============================= for testing mass operator(start) ===============================#
-
-
 # here we solve (v,kinv*uh) = (v,kinv*ue)
 def GetLocalVecExcact(coord_E,Q,quadmethod):
     """This function returns Ve = (v,kinv*ue), which is 8x1 vector
@@ -1495,3 +1495,95 @@ def AssemblyTestMass(mesh, nelx, nely, Q, quadmethod):
         U[edgedof[i],0] = U[edgedof[i],0]/2
 
     return M, V, U
+
+#============================= for InfSup constant (start) ===============================#
+
+def GetLocalInfSupMat(coord_E,Q,quadmethod):
+    """This function returns the interpolation matrix at quadrature points
+    N and mass matrix Me = N^T*W*N (interpolation of (v,K^{-1}*u)), where
+    W = diag(W1,W2,...Wq) and Wi = wi*K^{-1} where K^{-1} is inverse of permeability matrix
+    Wi is 2x2 matrix. and 
+    N: Nodal basis evaluated at quadrature points
+    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
+
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    Me: the nodal interpolation matrix computed at quadrature points
+    shape (8,8), 
+    """
+    w, q = GetQuadrature(Q, quadmethod)
+    N = np.zeros((0,8))
+    D = np.zeros((0,8))
+    Np = np.zeros((0,1))
+    Nhatp = np.array([[1]])
+    W1 = np.zeros((2*Q*Q,2*Q*Q))
+    W2 = np.zeros((Q*Q,Q*Q))
+    for i in range(Q):
+        for j in range(Q):
+            xhat = q[j]
+            yhat = q[i]
+            ww = w[i]*w[j]
+            Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
+            N = np.append(N,Nhat, axis=0)
+            Dhat = GetDivACNodalBasis(coord_E)
+            D = np.append(D,Dhat, axis=0)
+            Np = np.append(Np,Nhatp,axis=0)
+            X, DF_E, J_E = BilinearMap(coord_E, [xhat,yhat])
+            W1[2*j+2*Q*i][2*j+2*Q*i]=ww*J_E
+            W1[2*j+1+2*Q*i][2*j+1+2*Q*i]=ww*J_E
+            W2[j+Q*i][j+Q*i] = ww*J_E
+
+    Me = N.T @ W1 @ N
+    div_e = D.T @ W2 @ D
+    Ce = Np.T @ W2 @ Np
+    Be = Np.T @ W2 @ D
+
+    He = Me + div_e 
+    return He, Be, Ce
+
+
+def GetGlobalInfSupMat(MMS, mesh, nelx, nely, Q, quadmethod):
+
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    H = np.zeros((ndof,ndof))
+    B = np.zeros((numelem, ndof))
+    C = np.zeros((numelem,numelem))
+    for e in range(numelem):
+        # get element restriction operator L for element e
+        L = GetElementRestriction(mesh, nelx, nely, e)
+        # get discretized vector u for element e
+        CoordElem = GetCoordElem(mesh, nelx, nely, e)
+        He, Be, Ce = GetLocalInfSupMat(CoordElem,Q,quadmethod)
+        
+        # assemble H
+        H = H + L.T @ He @ L
+        # assemble B, C
+        B[e,:] = Be @ L
+        C[e,e] = Ce
+
+    return H, B, C
+
+
+def GetInfSupConst(H, B, C):
+
+    Hinv = np.linalg.inv(H)
+    LHS = B @ Hinv @ B.T
+    RHS = C
+    D, V = scipy.linalg.eig(LHS, RHS) 
+    idx = np.argsort(D)
+    l = []
+    for i in range(len(D)):
+        l.append(D[idx[i]])
+    l = np.array(l).real
+    beta = math.sqrt(l[0])
+
+    return beta, l
