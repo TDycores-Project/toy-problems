@@ -92,9 +92,10 @@ def main():
         #FE.PltSolution(mesh, nelx, nely, res_u, res_p, 'res_ux','res_uy','res_p')
 
     if problem == 'infsup':
-        H, B, C = FE.GetGlobalInfSupMat(MMS, mesh, nelx, nely, Q, quadmethod)
-        beta, l = FE.GetInfSupConst(H, B, C)
-        print("infsup constant:", beta)
+        H, M, B, C = FE.GetGlobalInfSupMat(mesh, nelx, nely, Q, quadmethod)
+        alpha, beta = FE.GetInfSupConst(H, M, B, C)
+        FE.plotmesh(mesh, nelx, nely)
+        print("coercivity and infsup constants:", alpha, beta)
 
     return
 
