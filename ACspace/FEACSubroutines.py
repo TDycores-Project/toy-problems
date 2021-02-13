@@ -551,7 +551,7 @@ def GetNodeCoord(mesh, nelx, nely):
 
         y = np.zeros((numnodes, 1))
         for i in range(0, nodex):
-            y1 = np.linspace(y0[i], 0.2+0.45*x0[i], nodey)
+            y1 = np.linspace(y0[i], 0.01+0.51*x0[i], nodey)
             for j in range(0, nodey):
                 y[i + j*nodex] = y1[j]   # collection of y
 
@@ -908,9 +908,6 @@ def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
 
     Fpe = Np.T @ W @ Fp
     Be = Np.T @ W @ D
-    # I need div for infsup test
-    div = D.T @ W @ D
-    C = Np.T @ W @ Np
 
     return Be, Fpe
 
@@ -1213,19 +1210,6 @@ def GetResidual(K,u,p, nelx, nely):
 
     return res_p, res_u
 
-def GetEigenvalue(M,B):
-
-    Minv = np.linalg.inv(M)
-    D, V = np.linalg.eig(B @ Minv @ B.T)
-    # we need to sort the eigenvalues, is not sorted
-    idx = np.argsort(D)
-    #V = V[:,idx]
-    l1 = []
-    for i in range(len(D)):
-        l1.append(D[idx[i]])
-
-    return l1
-
 
 def PopulateNode(mesh, nelx, nely):
     """This function populates the nodes we have for plotting purpose
@@ -1342,9 +1326,7 @@ def PltSolution(mesh,nelx, nely, u, p, title1, title2, title3):
 
     return
 
-
 #============================= for testing div operator (start) ===============================#
-
 def uexact(x,y):
     #if you change u, don't forget to update div
     u = [x-y,x+y]
@@ -1499,24 +1481,19 @@ def AssemblyTestMass(mesh, nelx, nely, Q, quadmethod):
 #============================= for InfSup constant (start) ===============================#
 
 def GetLocalInfSupMat(coord_E,Q,quadmethod):
-    """This function returns the interpolation matrix at quadrature points
-    N and mass matrix Me = N^T*W*N (interpolation of (v,K^{-1}*u)), where
-    W = diag(W1,W2,...Wq) and Wi = wi*K^{-1} where K^{-1} is inverse of permeability matrix
-    Wi is 2x2 matrix. and 
-    N: Nodal basis evaluated at quadrature points
-    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
+    """In equation 3.2 of Arnold nad Marie 2009 we have
+    <u,v>_V + b(v,p) + b(u,q) = -lamda<p,q>_Q   for all v,q in VxQ
 
-    Input:
-    ------
-    coord_E: coordinate of element E as 4x2 array
-    Q: number of quadrature points you want in 1D
-    quadmethod: The method for computing q and w
-    either 'GAUSS' or 'LGL'
+    and in eq. 3.4
+    a(u,v) + b(v,p) + b(u,q) = lamda<u,v>_V     for all v,q in VxQ
 
-    Output:
-    -------
-    Me: the nodal interpolation matrix computed at quadrature points
-    shape (8,8), 
+    In our problem V=H(div), Q=L^2, and the inner product <.,.> is
+    <u,v>_V = \int{u v   + div(u) div(v)}
+    <p,q>_Q = \int{p q}
+    a(u,v) = \int{v k^{-1}u}  (here we consider k=I)
+    b(u,q) = \int{q div(u)}
+
+    In this function we discrtize above quantity for an element
     """
     w, q = GetQuadrature(Q, quadmethod)
     N = np.zeros((0,8))
@@ -1540,21 +1517,29 @@ def GetLocalInfSupMat(coord_E,Q,quadmethod):
             W1[2*j+1+2*Q*i][2*j+1+2*Q*i]=ww*J_E
             W2[j+Q*i][j+Q*i] = ww*J_E
 
+    # a(u,v) (k^{-1}=I)
     Me = N.T @ W1 @ N
+    # div(u) div(v)
     div_e = D.T @ W2 @ D
+    # <p, q>_Q
     Ce = Np.T @ W2 @ Np
+    # b(u,q)
     Be = Np.T @ W2 @ D
-
+    # <u,v>_V
     He = Me + div_e 
-    return He, Be, Ce
+
+    return He, Me, Be, Ce
 
 
-def GetGlobalInfSupMat(MMS, mesh, nelx, nely, Q, quadmethod):
-
+def GetGlobalInfSupMat(mesh, nelx, nely, Q, quadmethod):
+    """
+    This fuction assembles He, Me, Be, Ce
+    """
     numelem = nelx*nely
     LMu = GetLMu(nelx, nely)
     ndof = np.amax(LMu) + 1
     H = np.zeros((ndof,ndof))
+    M = np.zeros((ndof,ndof))
     B = np.zeros((numelem, ndof))
     C = np.zeros((numelem,numelem))
     for e in range(numelem):
@@ -1562,28 +1547,43 @@ def GetGlobalInfSupMat(MMS, mesh, nelx, nely, Q, quadmethod):
         L = GetElementRestriction(mesh, nelx, nely, e)
         # get discretized vector u for element e
         CoordElem = GetCoordElem(mesh, nelx, nely, e)
-        He, Be, Ce = GetLocalInfSupMat(CoordElem,Q,quadmethod)
+        He, Me, Be, Ce = GetLocalInfSupMat(CoordElem,Q,quadmethod)
         
-        # assemble H
+        # assemble H, M
         H = H + L.T @ He @ L
+        M = M + L.T @ Me @ L
         # assemble B, C
         B[e,:] = Be @ L
         C[e,e] = Ce
 
-    return H, B, C
+    return H, M, B, C
 
 
-def GetInfSupConst(H, B, C):
+def GetInfSupConst(H, M, B, C):
+    """ This function solves
+    <u,v>_V + b(v,p) + b(u,q) = -lamda<p,q>_Q
+    where 
+    beta = \sqrt{\lambda_min} is the inf-sup constant
+    and 
+    a(u,v) + b(v,p) + b(u,q) = lamda<u,v>_V
+    where 
+    alpha = min(abs(\lambda)) which is coercivity constant
+    """
 
     Hinv = np.linalg.inv(H)
-    LHS = B @ Hinv @ B.T
-    RHS = C
-    D, V = scipy.linalg.eig(LHS, RHS) 
-    idx = np.argsort(D)
-    l = []
-    for i in range(len(D)):
-        l.append(D[idx[i]])
-    l = np.array(l).real
-    beta = math.sqrt(l[0])
+    LHS1 = B @ Hinv @ B.T
+    RHS1 = C
+    D1, V1 = scipy.linalg.eig(LHS1, RHS1) 
+    D1 = D1.real
+    lambda1_min = np.min(D1) 
+    # inf-sup constant
+    beta = math.sqrt(lambda1_min)
 
-    return beta, l
+    LHS2 = np.block([[M, B.T],[B, 0*C]])
+    RHS2 = np.block([[H, 0*B.T],[0*B, 0*C]])
+    D2, V2 = scipy.linalg.eig(LHS2, RHS2) 
+    D2 = D2.real
+    # coercivity cosntant
+    alpha = np.amin(abs(D2))
+
+    return alpha, beta
