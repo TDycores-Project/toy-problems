@@ -869,7 +869,7 @@ class TestGlobalMassMatStretched(unittest.TestCase):
         norm_U = np.linalg.norm(dU-U)
         print('Error of Assembled mass test on 2x5 stretched mesh:',norm_U)
         for i in range(len(dU)):
-            self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-10)
+            self.assertAlmostEqual(dU[i][0], U[i][0], None, None, 1e-9)
 
 
 class TestGlobalMassMatRandom(unittest.TestCase):
