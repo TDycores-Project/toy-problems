@@ -86,7 +86,8 @@ def main():
     
         print("Velocity and Pressure Absolute Error:",normerror_u, normerror_p)
     
-        #FE.PltSolution(mesh, nelx, nely, du, dp, 'ux_h','uy_h','p_h' )
+        FE.plotmesh(mesh, nelx, nely)
+        FE.PltSolution(mesh, nelx, nely, du, dp, 'ux_h','uy_h','p_h' )
         #FE.PltSolution(mesh, nelx, nely, u, p,'ux_ex','uy_ex','p_ex')
         #FE.PltSolution(mesh, nelx, nely, error_u, error_p,'abs(ux_ex - ux_h)', 'abs(uy_ex - uy_h)', 'abs(p_ex - p_h)')
         #FE.PltSolution(mesh, nelx, nely, res_u, res_p, 'res_ux','res_uy','res_p')

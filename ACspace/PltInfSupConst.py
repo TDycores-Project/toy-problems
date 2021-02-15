@@ -34,10 +34,10 @@ def plot():
     ax.legend(loc='best')
     ax.set_xlabel('h')
     ax.set_ylabel('coercivity and infsup')
-    ax.set_title('Uniform mesh')
+    #ax.set_title('Uniform mesh')
     #xlim(.06, .3)
     fig.tight_layout()
-    plt.savefig('InfSup.png', bbox_inches='tight')
+    plt.savefig('infsup.png', bbox_inches='tight')
 
 
 if __name__ == "__main__":

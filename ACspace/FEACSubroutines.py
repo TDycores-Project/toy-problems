@@ -81,7 +81,7 @@ def ForcingQuadratic(x, y):
 
 def PressureQuartic(x, y):
 
-    p = x*(1-x)*y*(1-y)
+    p = 3.14 + x*(1-x)*y*(1-y)
 
     return p
 
@@ -1500,6 +1500,7 @@ def GetLocalInfSupMat(coord_E,Q,quadmethod):
     D = np.zeros((0,8))
     Np = np.zeros((0,1))
     Nhatp = np.array([[1]])
+    W = np.zeros((2*Q*Q,2*Q*Q))
     W1 = np.zeros((2*Q*Q,2*Q*Q))
     W2 = np.zeros((Q*Q,Q*Q))
     for i in range(Q):
@@ -1513,20 +1514,32 @@ def GetLocalInfSupMat(coord_E,Q,quadmethod):
             D = np.append(D,Dhat, axis=0)
             Np = np.append(Np,Nhatp,axis=0)
             X, DF_E, J_E = BilinearMap(coord_E, [xhat,yhat])
+            x = X[0][0]
+            y = X[1][0]
+            k = Perm(x, y)
+            kinv = np.linalg.inv(k)
+            # this is for a(u,v)
+            W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww*J_E
+            W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww*J_E
+            W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww*J_E
+            W[2*j+1+2*Q*i][2*j+1+2*Q*i]=kinv[1][1]*ww*J_E
+            # this is for int{u v}
             W1[2*j+2*Q*i][2*j+2*Q*i]=ww*J_E
             W1[2*j+1+2*Q*i][2*j+1+2*Q*i]=ww*J_E
             W2[j+Q*i][j+Q*i] = ww*J_E
 
-    # a(u,v) (k^{-1}=I)
-    Me = N.T @ W1 @ N
-    # div(u) div(v)
+    # \int{u v}
+    u_v = N.T @ W1 @ N
+    # \int{div(u) div(v)}
     div_e = D.T @ W2 @ D
+    # <u,v>_V
+    He = u_v + div_e
     # <p, q>_Q
     Ce = Np.T @ W2 @ Np
     # b(u,q)
-    Be = Np.T @ W2 @ D
-    # <u,v>_V
-    He = Me + div_e 
+    Be = Np.T @ W2 @ D 
+    # a(u,v)
+    Me = N.T @ W @ N
 
     return He, Me, Be, Ce
 
