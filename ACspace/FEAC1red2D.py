@@ -77,14 +77,15 @@ def main():
 
         dp, du = FE.GetFESol(K,F,nelx,nely)
         p, u = FE.GetExactSol(MMS, mesh, nelx, nely)
+        h = FE.Gethsz(mesh, nelx, nely)
         #res_p, res_u = FE.GetResidual(K,u,p, nelx, nely)
 
         #error_u = np.absolute(du-u)
         #error_p = np.absolute(dp-p)
         normerror_u = np.linalg.norm(du-u)/np.linalg.norm(u)
         normerror_p = np.linalg.norm(dp-p)/np.linalg.norm(p)
-    
-        print("Velocity and Pressure Absolute Error:",normerror_u, normerror_p)
+        
+        print("h, Velocity and Pressure Absolute Error:",h, normerror_u, normerror_p)
     
         FE.plotmesh(mesh, nelx, nely)
         FE.PltSolution(mesh, nelx, nely, du, dp, 'ux_h','uy_h','p_h' )
@@ -95,8 +96,9 @@ def main():
     if problem == 'infsup':
         H, M, B, C = FE.GetGlobalInfSupMat(mesh, nelx, nely, Q, quadmethod)
         alpha, beta = FE.GetInfSupConst(H, M, B, C)
+        h = FE.Gethsz(mesh, nelx, nely)
         FE.plotmesh(mesh, nelx, nely)
-        print("coercivity and infsup constants:", alpha, beta)
+        print("h, coercivity and infsup constants:",h, alpha, beta)
 
     return
 
