@@ -24,20 +24,20 @@ def plot():
     data = pd.read_csv(InfSup)
     fig, ax = plt.subplots()
 
-    data = data.sort_values('mesh_res')
+    data = data.sort_values('run')
     alpha = data['coercivity']
     beta = data['infsup']
-    h = 1/data['mesh_res']
+    h = data['h']
     ax.loglog(h, alpha, '--', color='blue', label='coercivity constant')
     ax.loglog(h, beta, '--', color='black', label='infsup constant')
 
-    ax.legend(loc='best')
+    ax.legend(loc='upper left')
     ax.set_xlabel('h')
     ax.set_ylabel('coercivity and infsup')
     #ax.set_title('Uniform mesh')
     #xlim(.06, .3)
     fig.tight_layout()
-    plt.savefig('infsup.png', bbox_inches='tight')
+    plt.savefig('infsup.png',bbox_inches='tight')
 
 
 if __name__ == "__main__":

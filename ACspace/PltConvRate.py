@@ -24,19 +24,19 @@ def plot():
     data = pd.read_csv(ConvResult)
     fig, ax = plt.subplots()
 
-    data = data.sort_values('u_error')
+    data = data.sort_values('run')
     E_u = data['u_error']
     E_p = data['p_error']
-    h = 1/data['mesh_res']
+    h = data['h']
     H1 =  E_p[0]* (h/h[0]) # H = C h^1
     H2 =  E_u[0]* (h/h[0])**2  # H = C h^2
 
-    ax.loglog(h, E_p, 'o', color='blue')
-    ax.loglog(h, E_u, 'o', color='black')
-    ax.loglog(h, H1, '--', color='blue', label='Pressure O(h)')
-    ax.loglog(h, H2, '--', color='black', label='Velocity O(h$^2$)')
+    ax.loglog(h, E_p, 'o', color='blue', label='Pressure')
+    ax.loglog(h, E_u, 'o', color='black', label = 'Velocity')
+    ax.loglog(h, H1, '--', color='blue', label='O(h)')
+    ax.loglog(h, H2, '--', color='black', label='O(h$^2$)')
 
-    ax.legend(loc='best')
+    ax.legend(loc='upper left')
     ax.set_xlabel('h')
     ax.set_ylabel('Relative Error')
     ax.set_title('Convergence by h Refinement')
