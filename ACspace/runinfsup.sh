@@ -11,7 +11,7 @@ declare -A test_flags
     test_flags[res_end]=16
 
 fileName=InfSup.csv
-echo ",mesh_res,coercivity,infsup" > $fileName
+echo "run,h,coercivity,infsup" > $fileName
 i=0
 
 for ((res=${test_flags[res_start]}; res<=${test_flags[res_end]}; res+=${test_flags[res_stride]})); do
@@ -23,6 +23,6 @@ for ((res=${test_flags[res_start]}; res<=${test_flags[res_end]}; res+=${test_fla
             args="$args --$arg ${run_flags[$arg]}"
         fi
     done
-    python3 FEAC1red2D.py $args | grep "coercivity and infsup constants:" | awk -v i="$i" -v res="$res" '{ print i","res","$5","$6}' >> $fileName
+    python3 FEAC1red2D.py $args | grep "h, coercivity and infsup constants:" | awk -v i="$i" '{ print i","$6","$7","$8}' >> $fileName
     i=$((i+1))
 done
