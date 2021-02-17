@@ -681,6 +681,29 @@ def GetCoordElem(mesh, nelx, nely, e):
 
     return CoordElem
 
+def Gethsz(mesh, nelx, nely):
+
+    d1 = np.zeros((nelx*nely,1))
+    d2 = np.zeros((nelx*nely,1))
+    for e in range(nelx*nely):
+        CoordElem = GetCoordElem(mesh, nelx, nely, e)
+        x0 = CoordElem[0][0]
+        x1 = CoordElem[1][0]
+        x2 = CoordElem[2][0]
+        x3 = CoordElem[3][0]
+        y0 = CoordElem[0][1]
+        y1 = CoordElem[1][1]
+        y2 = CoordElem[2][1]
+        y3 = CoordElem[3][1]
+
+        d1[e][0] = math.sqrt((x3-x0)**2 + (y3-y0)**2)
+        d2[e][0] = math.sqrt((x2-x1)**2 + (y2-y1)**2)
+
+    h1 = np.amax(d1)
+    h2 = np.amax(d2)
+    h = max([h1, h2])
+
+    return h
 
 def GetGlobalNormal(mesh, nelx, nely, e):
     """
@@ -701,21 +724,15 @@ def GetGlobalNormal(mesh, nelx, nely, e):
     |       |
     0-------1
     """
-    IENe, IENn = GetConnectivity(nelx, nely)
-    x , y = GetNodeCoord(mesh, nelx, nely)
-    # get coordinate of the element
-    ce = np.zeros((4,1), dtype=int)
-    for i in range(4):
-        ce[i][0] = IENn[i][e]
-    
-    x0 = x[ce[0,0]][0]
-    x1 = x[ce[1,0]][0]
-    x2 = x[ce[2,0]][0]
-    x3 = x[ce[3,0]][0]
-    y0 = y[ce[0,0]][0]
-    y1 = y[ce[1,0]][0]
-    y2 = y[ce[2,0]][0]
-    y3 = y[ce[3,0]][0]
+    CoordElem = GetCoordElem(mesh, nelx, nely, e)
+    x0 = CoordElem[0][0]
+    x1 = CoordElem[1][0]
+    x2 = CoordElem[2][0]
+    x3 = CoordElem[3][0]
+    y0 = CoordElem[0][1]
+    y1 = CoordElem[1][1]
+    y2 = CoordElem[2][1]
+    y3 = CoordElem[3][1]
 
     # Get Tangential direction form node i to j, i< j as + direction
     Tb = np.array([x1 - x0, y1 - y0])
