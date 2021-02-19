@@ -58,6 +58,13 @@ def main():
                         type=str,
                         default='convrate',
                         help='run convergence rate problem')
+
+    parser.add_argument('--massQmode',
+                        dest='massQmode',
+                        type=str,
+                        default='GAUSS',
+                        help='LGL is like WY and GAUSS is AC')
+
     args = parser.parse_args()
 
     nelx = args.nelx
@@ -67,10 +74,13 @@ def main():
     mesh = args.mesh
     MMS = args.MMS
     problem = args.problem
+    # massQmode=LGL is WY problem and QAUSS is AC
+    massQmode = args.massQmode
     edge = 'all'
 
     if problem == 'convrate':
-        F1, K = FE.Assembly(MMS, mesh, nelx, nely, Q, quadmethod)
+
+        F1, K = FE.Assembly(massQmode, MMS, mesh, nelx, nely, Q, quadmethod)
 
         T = FE.GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge)
         F = F1 - T

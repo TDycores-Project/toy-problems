@@ -1,6 +1,8 @@
 #!/bin/bash
 declare -A run_flags
     run_flags[problem]=convrate
+    # GAUSS is AC, LGL is WY
+    run_flags[massQmode]=GAUSS
     run_flags[nelx]=4
     run_flags[nely]=4
     run_flags[MMS]=quartic

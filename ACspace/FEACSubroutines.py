@@ -929,7 +929,7 @@ def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
     return Be, Fpe
 
 
-def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
+def Assembly(massQmode,MMS, mesh, nelx, nely, Q, quadmethod):
     """This function assembles M=(v,kinv*u), B=(q,div(u)) and Fp=(q,f)
     """
     numelem = nelx*nely
@@ -944,7 +944,7 @@ def Assembly(MMS, mesh, nelx, nely, Q, quadmethod):
         L = GetElementRestriction(mesh, nelx, nely, e)
         # get discretized vector u for element e
         CoordElem = GetCoordElem(mesh, nelx, nely, e)
-        Me = GetLocalMassMat(CoordElem,Q,quadmethod)
+        Me = GetLocalMassMat(CoordElem,Q,massQmode)
         Be, Fpe = GetLocalDivANDForcing(MMS, CoordElem,Q,quadmethod)
         
         # assemble M
