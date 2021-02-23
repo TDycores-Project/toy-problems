@@ -617,7 +617,6 @@ def GetID(nelx, nely):
     This function returns an array of global dof of size (2,numedges)
     each edge has 2 dof
     """
-
     nodex = nelx + 1
     nodey = nely + 1
     numedges = (nodex*nely) + (nodey*nelx)
@@ -633,7 +632,6 @@ def GetLMu(nelx, nely):
     """
     This function is LM for velocity created based on ID arrany and connectivity
     """
-
     numelem = nelx*nely
     ndof_u = 8
 
@@ -750,15 +748,10 @@ def GetGlobalNormal(mesh, nelx, nely, e):
     # do cross product with positive z-direction
     # Normal for bottom and right edges are outward,
     # and for top and left edges are inward
-    k = np.array([0, 0, 1])
-    nb = np.cross(Tb, k)
-    Nb = np.array([nb[0], nb[1]])
-    nr = np.cross(Tr, k)
-    Nr = np.array([nr[0], nr[1]])
-    nl = np.cross(Tl, k)
-    Nl = np.array([nl[0], nl[1]])
-    nt = np.cross(Tt, k)
-    Nt = np.array([nt[0], nt[1]])
+    Nb = np.array([Tb[1], -Tb[0]])
+    Nr = np.array([Tr[1], -Tr[0]])
+    Nl = np.array([Tl[1], -Tl[0]])
+    Nt = np.array([Tt[1], -Tt[0]])
 
     return Nb, Nr, Nl, Nt
 
@@ -1140,7 +1133,6 @@ def GetUexact(MMS, mesh, nelx, nely, e):
             ue[i][0] = np.dot(u,normals[i,:])
         elif MMS == 'quartic':
             u = VelocityQuartic(x, y)
-            u = u
             ue[i][0] = np.dot(u,normals[i,:])
         elif MMS == 'quadratic':
             u = VelocityQuadratic(x, y)

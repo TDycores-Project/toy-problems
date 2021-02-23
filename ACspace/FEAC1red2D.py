@@ -81,7 +81,6 @@ def main():
     if problem == 'convrate':
 
         F1, K = FE.Assembly(massQmode, MMS, mesh, nelx, nely, Q, quadmethod)
-
         T = FE.GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge)
         F = F1 - T
 
@@ -97,8 +96,8 @@ def main():
         
         print("h, Velocity and Pressure Absolute Error:",h, normerror_u, normerror_p)
     
-        FE.plotmesh(mesh, nelx, nely)
-        FE.PltSolution(mesh, nelx, nely, du, dp, 'ux_h','uy_h','p_h' )
+        #FE.plotmesh(mesh, nelx, nely)
+        #FE.PltSolution(mesh, nelx, nely, du, dp, 'ux_h','uy_h','p_h' )
         #FE.PltSolution(mesh, nelx, nely, u, p,'ux_ex','uy_ex','p_ex')
         #FE.PltSolution(mesh, nelx, nely, error_u, error_p,'abs(ux_ex - ux_h)', 'abs(uy_ex - uy_h)', 'abs(p_ex - p_h)')
         #FE.PltSolution(mesh, nelx, nely, res_u, res_p, 'res_ux','res_uy','res_p')
@@ -107,7 +106,7 @@ def main():
         H, M, B, C = FE.GetGlobalInfSupMat(mesh, nelx, nely, Q, quadmethod)
         alpha, beta = FE.GetInfSupConst(H, M, B, C)
         h = FE.Gethsz(mesh, nelx, nely)
-        FE.plotmesh(mesh, nelx, nely)
+        #FE.plotmesh(mesh, nelx, nely)
         print("h, coercivity and infsup constants:",h, alpha, beta)
 
     return

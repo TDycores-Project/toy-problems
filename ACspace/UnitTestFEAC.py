@@ -747,7 +747,6 @@ class TestLocalMassMat(unittest.TestCase):
         nely = 1
         # test for first element
         for e in range(nelx*nely):
-            e = 0
             ue = FE.GetVecUe(mesh, nelx, nely, e)
             CoordElem = FE.GetCoordElem(mesh, nelx, nely, e)
             Ve = FE.GetLocalVecExcact(CoordElem,Q,quadmethod)
