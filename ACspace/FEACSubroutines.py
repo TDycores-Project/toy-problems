@@ -1,0 +1,1611 @@
+""" This file includes the necessary modules for
+implementing AC mixed-FEM. 
+See TODD ARBOGAST, MAICON R. CORREA, SIAM journal 2016
+week form
+ (v,k^{-1}*u) - (div(v),p) = -<v\cdot n, g>,   for all v in V
+-(w,div(u))                = -(w,f),           for all w in W
+"""
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+import scipy.linalg
+
+#================================== MMS Solutions (start) ====================================#
+
+def Perm(x, y):
+    """ permeability is consider 1 as given
+    in MMS of AC paper.
+    """
+    k = np.array([[1.,0],[0,1.]])
+    return k
+
+def PressureConstant(x, y):
+
+    p = 3.14
+
+    return p
+
+def VelocityConstant(x, y):
+
+    vx = 0.
+    vy = 0.
+    v = [vx, vy]
+    return v
+
+def ForcingConstant(x, y):
+
+    f = 0.
+
+    return f
+
+def PressureLinear(x, y):
+
+    p = 3.14 + x + y
+
+    return p
+
+def VelocityLinear(x, y):
+
+    k = Perm(x, y)
+    vx = -(k[0][0]*1. + k[0][1]*1.)
+    vy = -(k[1][0]*1. + k[1][1]*1.)
+    v = [vx, vy]
+    return v
+
+def ForcingLinear(x, y):
+
+    f = 0.
+
+    return f
+
+def PressureQuadratic(x, y):
+
+    p = 3.14 + x*(1-x) + y*(1-y)
+
+    return p
+
+def VelocityQuadratic(x, y):
+
+    k = Perm(x, y)
+    vx = -(k[0][0]*(1-2*x) + k[0][1]*(1-2*y))
+    vy = -(k[1][0]*(1-2*x) + k[1][1]*(1-2*y))
+    v = [vx, vy]
+    return v
+
+def ForcingQuadratic(x, y):
+
+    k = Perm(x, y)
+    f = k[0][0]*2 + k[1][1]*2
+
+    return f
+
+def PressureQuartic(x, y):
+
+    p = 3.14 + x*(1-x)*y*(1-y)
+
+    return p
+
+def VelocityQuartic(x, y):
+
+    k = Perm(x, y)
+    vx = -(k[0][0]*(1-2*x)*y*(1-y) + k[0][1]*(1-2*y)*x*(1-x))
+    vy = -(k[1][0]*(1-2*x)*y*(1-y) + k[1][1]*(1-2*y)*x*(1-x))
+    v = [vx, vy]
+    return v
+
+def ForcingQuartic(x, y):
+
+    k = Perm(x, y)
+    vx_x =  2*k[0][0]*y*(1-y) - k[0][1]*(1-2*y)*(1-2*x)
+    vy_y =   -k[1][0]*(1-2*y)*(1-2*x) + 2*k[1][1]*x*(1-x)
+    f = vx_x + vy_y
+    return f
+
+def PressureTrig(x, y):
+
+    p = math.sin(math.pi*x)*math.sin(math.pi*y)
+
+    return p
+
+def VelocityTrig(x, y):
+
+    k = Perm(x, y)
+    vx = -math.pi*(k[0][0]*math.cos(math.pi*x)*math.sin(math.pi*y)
+                 + k[0][1]*math.sin(math.pi*x)*math.cos(math.pi*y))
+    vy = -math.pi*(k[1][0]*math.cos(math.pi*x)*math.sin(math.pi*y)
+                 + k[1][1]*math.sin(math.pi*x)*math.cos(math.pi*y))
+    v = [vx, vy]
+    return v
+
+def ForcingTrig(x, y):
+
+    k = Perm(x, y)
+    vx_x = -math.pi**2*(-k[0][0]*math.sin(math.pi*x)*math.sin(math.pi*y)
+                        +k[0][1]*math.cos(math.pi*x)*math.cos(math.pi*y))
+    vy_y = -math.pi**2*(k[1][0]*math.cos(math.pi*x)*math.cos(math.pi*y)
+                       -k[1][1]*math.sin(math.pi*x)*math.sin(math.pi*y))
+    f = vx_x + vy_y
+    return f
+
+#================================== MMS Solutions (end) ====================================#
+
+def BilinearMap(coord_E, Xhat):
+    """ 
+    This function maps Xhat=[xhat,yhat] in Ehat=[-1,1]^2 
+    to X=(x,y) in E.
+    Written based on eq. (3.3), (3.4) of AC paper 2016
+    Input:
+    ------
+    coord_E: coordinates of quadrilateral E .
+    coord_E is 4x2 array
+    coord_E = [[x0,y0],
+               [x1,y1],
+               [x2,y2],
+               [x3,y3]] with vertices numbering
+    2----3
+    |    |
+    0----1
+    Xhat = [xhat, yhat] in Ehat
+    Output:
+    ------
+    X=[[x],[y]]: mapped vector in E.
+    DF_E: Jacobian matrix
+    J_E: det(DF_E)
+    later we transform vector vhat to v by eq. (3.4)
+    v(x) = P_E(vhat)(x) = (DF_E/J_E)*vhat(xhat)
+    """
+    xhat = Xhat[0]
+    yhat = Xhat[1]
+    P = 0.25 * np.array([[(1-xhat)*(1-yhat),
+                          (1+xhat)*(1-yhat),
+                          (1-xhat)*(1+yhat),
+                          (1+xhat)*(1+yhat)]])
+    P_E = P @ coord_E
+    # x=F_E(xhat)
+    X = P_E.T
+    # gradient of P, 1st row = dP/dxhat, 2nd row=dP/dyhat
+    GradP = 0.25 * np.array([[-(1-yhat),(1-yhat),-(1+yhat),(1+yhat)],
+                             [-(1-xhat),-(1+xhat),(1-xhat),(1+xhat)]])
+
+    # DF_E = [[dx/dxhat, dx/dyhat],
+    #         [dy/dxhat, dy/dyhat]]
+    JT = GradP @ coord_E
+    DF_E = JT.T
+    J_E = np.linalg.det(DF_E)
+
+    return X, DF_E, J_E
+
+def GetNormal(coord_E, Xhat):
+    """Test of this function is passed! See test_FE_subroutines.py
+    This function returns the normal n and coordinate (x,y) on edge in element E.
+    Input:
+    ------
+    coord_E: vertices coordinate of element E
+    (xhat,yhat): coordinate of the edge in element Ehat=[-1,1]^2
+
+    Output:
+    -------
+    n: computed normal of an edge of element E
+    (x,y): mapped point of (xhat, yhat)
+
+    for example if you want normal on the left edge of E
+    enter coord_E, and (-1,0) to get 'n' of the left edge of E and corresponding (x,y)
+    """
+
+    X, DF_E, J_E = BilinearMap(coord_E, Xhat)
+    
+    dxdxhat = DF_E[0][0]
+    dydxhat = DF_E[1][0]
+    length1 = math.sqrt(dxdxhat*dxdxhat + dydxhat*dydxhat)
+
+    dxdyhat = DF_E[0][1]
+    dydyhat = DF_E[1][1]
+    length2 = math.sqrt(dxdyhat*dxdyhat + dydyhat*dydyhat)
+
+    xhat = Xhat[0]
+    yhat = Xhat[1]
+    if (xhat == -1. and -1.<yhat<1.):
+        # left edge, (0,0,1)x(dxdyhat,dydyhat,0)
+        n = np.array([-dydyhat, dxdyhat])
+        n = n/length2
+
+    elif (xhat == 1. and -1.<yhat<1.):
+        # right edge, (0,0,-1)x(dxdyhat,dydyhat,0)
+        n = np.array([dydyhat, -dxdyhat])
+        n = n/length2
+
+    elif (yhat == -1. and -1.<xhat<1.):
+        # bottom edge, (0,0,-1)x(dxdxhat,dydxhat,0)
+        n = np.array([dydxhat, -dxdxhat])
+        n = n/length1
+
+    elif (yhat == 1. and -1.<xhat<1.):
+        # top edge, (0,0,1)x(dxdxhat,dydxhat,0)
+        n = np.array([-dydxhat, dxdxhat])
+        n = n/length1
+        #n = [x/length1 for x in n]
+
+    else:
+        print("Error! Enter the Xhat=[xhat, yhat] on the edge of Ehat")
+
+    return n, X
+
+def VACred(coord_E, Xhat):
+    """
+    See eq. (3.14), (3.12), (3.15) of AC paper, SIAM J 2016
+    Note that (x,y) is defined on E
+    and xhat, yhat is defined on Ehat
+    returns 2x8 matrix which is our 8 prime basis phi_j
+    """
+    xhat = Xhat[0]
+    yhat = Xhat[1]
+    # sigma_hat_1 = curl((1-xhat^2)*yhat)
+    sghat1 = np.array([[1-xhat**2],[2*xhat*yhat]])
+ 
+    # sigma_hat_2 = curl((1-yhat^2)*xhat)
+    sghat2 = np.array([[-2*xhat*yhat],[yhat**2-1]])
+
+    X, DF_E, J_E = BilinearMap(coord_E, Xhat)
+    # sigma_i = P_E*sigma_hat_i
+    sg1 = (DF_E/J_E) @ sghat1
+    sg2 = (DF_E/J_E) @ sghat2
+
+    # (x,y) in E is
+    x = X[0][0]
+    y = X[1][0]
+    # we have 8 basis including sg1 and sg2
+    v1 = np.array([[1],[0]])
+    v2 = np.array([[x],[0]])
+    v3 = np.array([[y],[0]])
+    v4 = np.array([[0],[1]])
+    v5 = np.array([[0],[x]])
+    v6 = np.array([[0],[y]])
+
+    V = np.block([v1,v2,v3,v4,v5,v6,sg1,sg2])
+
+    return V
+
+def VondermondeMat(coord_E):
+    """
+    Input:
+    ------
+    coord_E: is the coordinate of vertices of element.
+    Note
+    2---3
+    |   |
+    0---1
+    Output:
+    ------
+    VM: the 8x8 vondermonde matrix
+    """
+    nl, X = GetNormal(coord_E, [-1., 0.])
+    nr, X = GetNormal(coord_E, [1., 0.])
+    nb, X = GetNormal(coord_E, [0., -1.])
+    nt, X = GetNormal(coord_E, [0., 1.])
+    normals = np.block([[nb],[nb],[nr],[nr],[nl],[nl],[nt],[nt]])
+    nodes = np.block([[-1,-1],[1,-1],[1,-1],[1,1],[-1,-1],[-1,1],[-1,1],[1,1]])
+    # vondermonde matrix, V_ij = phi_j(x_i).n_i
+    VM = np.zeros((8,8))
+
+    for i in range(8):
+        for j in range(8):
+            V = VACred(coord_E, nodes[i,:])
+            VM[i,j] = np.dot(V[:,j],normals[i,:])
+
+    return VM
+
+def GetACNodalBasis(coord_E,Xhat):
+    """This function returns the AC Nodal basis at point Xhat=[xhat,yhat]
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Xhat: is the coordinate at reference element [-1,1]^2
+
+    Output:
+    -------
+    Nhat: the nodal basis computed at Xhat=[xhat,yhat]
+    shape (2,8) as
+    Nhat = [v0,v1,v2,v3,v4,v5,v6,v7]
+    local numbering is as follow 
+     v6     v7
+    2---------3
+  v5|         |v3
+    |         |
+  v4|         |v2
+    0---------1
+     v0     v1
+    """
+    VM = VondermondeMat(coord_E)
+    V = VACred(coord_E, Xhat)
+    invVM = np.linalg.inv(VM)
+    Nhat = V @ invVM
+
+    return Nhat
+
+def GetDivACNodalBasis(coord_E):
+    """This function returns the divergence of AC Nodal basis at point Xhat=[xhat,yhat]
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Xhat: is the coordinate at reference element [-1,1]^2
+
+    Output:
+    -------
+    Dhat: the divergence of nodal basis computed at Xhat=[xhat,yhat]
+    shape (1,8)
+    """
+    VM = VondermondeMat(coord_E)
+    # This is the divergence of prime basis given
+    # in VACred functions
+    divV = np.array([[0, 1, 0, 0, 0, 1, 0, 0]])
+    invVM = np.linalg.inv(VM)
+    Dhat = divV @ invVM
+
+    return Dhat
+
+def GetQuadrature(Q, quadmethod):
+    """Test of this function is passed! See test_FE_subroutines.py
+    This function returns quadrature points (q) and its weight (w).
+    Input:
+    ------
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    w, q: quadrature weights and quadrature points in 1D
+    """
+
+    if quadmethod=='GAUSS':
+        beta = []
+        alpha = range(1, Q)
+        for i in range(0,Q-1):
+            beta1 = 0.5/math.sqrt(1-(2*alpha[i])**(-2))
+            beta.append(beta1)
+
+        D, V = np.linalg.eig(np.diag(beta, k=1) + np.diag(beta, k=-1))
+        # we need to sort the eigenvalues, is not sorted
+        idx = np.argsort(D)
+        V = V[:,idx]
+        w = []
+        q = []
+        for i in range(0,Q):
+            w.append(2*V[0][i]**2)
+            q.append(D[idx[i]])
+
+    elif quadmethod=='LGL':
+        x = []
+        alpha = range(0, Q)
+        for i in range(0,Q):
+            x.append(-math.cos(math.pi*alpha[i]/(Q-1)))
+
+        x = np.array(x)
+        P = np.zeros((Q,Q))
+        xold = 2*np.ones(Q)
+        error = np.absolute(x-xold)
+        iteration = 0
+        for i in range(0,Q):
+            while (error[i] > 1e-16):
+                xold = x
+                
+                P[:,0] = 1
+                P[:,1] = x
+                for k in range(1,Q-1):
+                    P[:,k+1] = np.divide(((2*k+1)*(x*P[:,k]) - (k)*P[:,k-1]),k+1)
+
+                x = xold - np.divide(x*P[:,Q-1]-P[:,Q-2],Q*P[:,Q-1])
+                error = np.absolute(x-xold)
+                iteration+=1
+
+        w=np.divide(2,(Q-1)*Q*P[:,Q-1]**2)
+        q=x
+    else:
+        print("Error: quadmethod is wrong!Please enter 'GAUSS' or 'LGL'!")
+    
+    return w, q
+
+def GetConnectivity(nelx, nely):
+    """This function returns the connectivity array based on edge
+    ----5--------6----
+    |       |        |
+    2       3        4        
+    |       |        |
+    ----0--------1----
+
+    3-------4--------5
+    |       |        |
+    |       |        |
+    |       |        |
+    0-------1--------2
+    local numbering of one element is
+    ----3----
+    |       |
+    2       1
+    |       |
+    ----0----
+
+    2-------3
+    |       |
+    |       |
+    |       |
+    0-------1
+
+
+    Input:
+    ------
+    nelx: number of element in x direction start from 1 NOT 0
+    nely: number of element in y direction start from 1 NOT 0
+    Output:
+    ------
+    IENe: connectivity array of size 4x(nelx*nely) based on edge numbering
+    We need IENe for assembly
+    IENn: connectivity array of size 4x(nelx*nely) based on node numbering
+    We need IENn for find the coordinate of nodes in assembly
+    """
+    # number of element
+    numelem = nelx*nely
+    # number of nodes in x-direction
+    nodex = nelx + 1
+    # number of nodes in y-direction
+    nodey = nely + 1
+    IENe = np.zeros((4,numelem), dtype=int)
+    for j in range(0,nely):
+        for i in range(0,nelx):
+            ele = (j)*nelx + i
+            
+            IENe[0][ele] = i + j*(nodex+nelx)
+            IENe[1][ele] = i + j*(nodex+nelx) + nodex
+            IENe[2][ele] = i + j*(nodex+nelx) + nelx
+            IENe[3][ele] = i + j*(nodex+nelx) + (nodex+nelx)
+
+    IENn = np.zeros((4,numelem), dtype=int)
+    for j in range(0,nely):
+        for i in range(0,nelx):
+            ele = (j)*nelx + i
+            IENn[0][ele] = i + j*nodex
+            IENn[1][ele] = i + j*nodex + 1
+            IENn[2][ele] = i + j*nodex + nodex
+            IENn[3][ele] = i + j*nodex + nodex + 1
+
+    return IENe, IENn
+
+def GetNodeCoord(mesh, nelx, nely):
+    """ This function returns the physical coordinates of the nodes.
+    Input:
+    ------
+    nelx:   integer
+            number of elements in the x direction.
+    nely:   integer
+            number of elements in the y direction.
+    mesh: can be unifrom or nonuniform
+
+    Output:
+    -------
+    x:      float (1d array)
+            the coordinate of the node in the x direction
+    y:      float (1d array)
+            the coordinate of the node in the y direction
+    The geometry we are working on is like the following.
+    (for nelx = 2, nely = 2)
+    6---------7----------8
+    |         |   (3)    |
+    |   (2)   |      ----5
+    |      ---4-----/    |
+    3-----/   |   (1)    |
+    |         |      ----2
+    |   (0)   |     /
+    |     ----1----/
+    0----/
+    There are 4 elements (numbering in parenthesis), and 9 nodes.
+    This function returns x,y as 9x2 array for the above mesh.
+    """
+    nodex = nelx + 1
+    nodey = nely + 1
+    numnodes = nodex*nodey
+    # interior nodes for random mesh
+    interiornodex = nelx - 1
+    interiornodey = nely - 1
+    interiornodes = interiornodex*interiornodey
+
+    hx = 1/nelx
+    hy = 1/nely
+    h = max([hx, hy])
+
+    # Divide [0,1] by nodex (mesh in the x direction)
+    x0 = np.linspace(0, 1, nodex)
+    if mesh == 'uniform':
+
+        y0 = 0.0*x0 # the bottom geometry line  
+
+        y = np.zeros((numnodes, 1))
+        for i in range(0, nodex):
+            # Divide [0,1] by nodey (mesh in the y direction)
+            y1 = np.linspace(y0[i], 1, nodey)
+            for j in range(0, nodey):
+                y[i + j*nodex] = y1[j]   # collection of y
+
+        x = np.zeros((numnodes, 1))
+        for i in range(0, nodey):
+            for j in range(0, nodex):
+                x[j + i*nodex] = x0[j]   # collection of x
+
+    elif mesh == 'nonuniform':
+
+        y0 = 0.5*x0 # the bottom geometry line
+
+        y = np.zeros((numnodes, 1))
+        for i in range(0, nodex):
+            y1 = np.linspace(y0[i], 1-0.2*x0[i], nodey)
+            for j in range(0, nodey):
+                y[i + j*nodex] = y1[j]   # collection of y
+
+        x = np.zeros((numnodes, 1))
+        for i in range(0, nodey):
+            for j in range(0, nodex):
+                x[j + i*nodex] = x0[j]   # collection of x
+
+    elif mesh == 'stretched':
+
+        y0 = 0.5*x0 # the bottom geometry line
+
+        y = np.zeros((numnodes, 1))
+        for i in range(0, nodex):
+            y1 = np.linspace(y0[i], 0.01+0.51*x0[i], nodey)
+            for j in range(0, nodey):
+                y[i + j*nodex] = y1[j]   # collection of y
+
+        x = np.zeros((numnodes, 1))
+        for i in range(0, nodey):
+            for j in range(0, nodex):
+                x[j + i*nodex] = x0[j]   # collection of x
+
+    elif mesh == 'random':
+
+        y0 = 0.0*x0 # the bottom geometry line  
+
+        y = np.zeros((numnodes, 1))
+        for i in range(0, nodex):
+            # Divide [0,1] by nodey (mesh in the y direction)
+            y1 = np.linspace(y0[i], 1, nodey)
+            for j in range(0, nodey):
+                y[i + j*nodex] = y1[j]   # collection of y
+        
+        x = np.zeros((numnodes, 1))
+        for i in range(0, nodey):
+            for j in range(0, nodex):
+                x[j + i*nodex] = x0[j]   # collection of x
+        
+        np.random.seed(1)
+        randnodes = np.random.rand(interiornodes)*h/2 - h/4
+        # perturb the (x,y) of interior nodes
+        for i in range(0,interiornodey):
+            for j in range(0,interiornodex):
+                x[(i+1)*(nodex) + j+1][0] = x[(i+1)*(nodex) + j+1][0] - randnodes[j+i*interiornodex]
+                y[(i+1)*(nodex) + j+1][0] = y[(i+1)*(nodex) + j+1][0] - randnodes[j+i*interiornodex]
+
+    else:
+        print("Enter one of the mesh option: 'unifrom', 'nonuniform', 'stretched', 'random' ")
+
+    return x, y
+
+def plotmesh(mesh, nelx, nely):
+
+    # Creates space for a figure to be drawn
+    fig, ax = plt.subplots()
+    nen = 4
+    IENe, IENn = GetConnectivity(nelx, nely)
+    x , y = GetNodeCoord(mesh, nelx, nely)
+    numelem = nelx * nely
+    xx = np.zeros(nen + 1)
+    yy = np.zeros(nen + 1)
+    localnodes = [0, 1, 3, 2, 0]
+    for i in range(numelem):
+        for j in range(nen+1):
+            xx[j] = x[IENn[localnodes[j], i]]
+            yy[j] = y[IENn[localnodes[j], i]]
+
+        plt.fill(xx, yy, edgecolor='black', fill=False)
+
+    #plt.title('Mesh distribution')
+    plt.show()
+
+    return
+
+def GetID(nelx, nely):
+    """
+    This function returns an array of global dof of size (2,numedges)
+    each edge has 2 dof
+    """
+    nodex = nelx + 1
+    nodey = nely + 1
+    numedges = (nodex*nely) + (nodey*nelx)
+    ID = np.zeros((2,numedges), dtype=int)
+    for i in range(0,numedges):
+        for j in range(0,2):
+            ID[j][i] = 2*i + j
+
+    return ID
+
+
+def GetLMu(nelx, nely):
+    """
+    This function is LM for velocity created based on ID arrany and connectivity
+    """
+    numelem = nelx*nely
+    ndof_u = 8
+
+    ID = GetID(nelx, nely)
+    IENe, IENn = GetConnectivity(nelx, nely)
+
+    LMu = np.zeros((ndof_u,numelem), dtype=int)
+    for i in range(0,numelem):
+        for j in range(0,4):
+            idd1 = ID[0][IENe[j][i]]
+            idd2 = ID[1][IENe[j][i]]
+            LMu[2*j][i] = idd1
+            LMu[2*j+1][i] = idd2
+
+    return LMu
+
+def GetLMp(nelx, nely):
+    """
+    This is LMp for pressure, maybe not needed
+    """
+    # add pressure dof to LM
+    LMu = GetLMu(nelx, nely)
+    maxLMu = np.amax(LMu)
+    ndof_p = 1
+    numelem = nelx*nely
+    LMp = np.zeros((ndof_p,numelem), dtype=int)
+    for i in range(0,numelem):
+        LMp[0][i] = maxLMu + i + 1
+
+    return LMp
+
+def GetCoordElem(mesh, nelx, nely, e):
+    """
+    This functions returns coordinate of element "e" 
+    """
+    IENe, IENn = GetConnectivity(nelx, nely)
+    x , y = GetNodeCoord(mesh, nelx, nely)
+    # get coordinate of the element
+    ce = np.zeros((4,1), dtype=int)
+    CoordElem = np.zeros((4,2))
+    for i in range(4):
+        ce[i][0] = IENn[i][e]
+        CoordElem[i][0] = x[ce[i,0]][0]
+        CoordElem[i][1] = y[ce[i,0]][0]
+
+    return CoordElem
+
+def Gethsz(mesh, nelx, nely):
+
+    d1 = np.zeros((nelx*nely,1))
+    d2 = np.zeros((nelx*nely,1))
+    for e in range(nelx*nely):
+        CoordElem = GetCoordElem(mesh, nelx, nely, e)
+        x0 = CoordElem[0][0]
+        x1 = CoordElem[1][0]
+        x2 = CoordElem[2][0]
+        x3 = CoordElem[3][0]
+        y0 = CoordElem[0][1]
+        y1 = CoordElem[1][1]
+        y2 = CoordElem[2][1]
+        y3 = CoordElem[3][1]
+
+        d1[e][0] = math.sqrt((x3-x0)**2 + (y3-y0)**2)
+        d2[e][0] = math.sqrt((x2-x1)**2 + (y2-y1)**2)
+
+    h1 = np.amax(d1)
+    h2 = np.amax(d2)
+    h = max([h1, h2])
+
+    return h
+
+def GetGlobalNormal(mesh, nelx, nely, e):
+    """
+    This function returns the global dof normals.
+    Note that the local dof directions are outward.
+    Then we compare the global dof direction and
+    local dof direction for assembly later
+
+    ----3----
+    |       |
+    2       1
+    |       |
+    ----0----
+
+    2-------3
+    |       |
+    |       |
+    |       |
+    0-------1
+    """
+    CoordElem = GetCoordElem(mesh, nelx, nely, e)
+    x0 = CoordElem[0][0]
+    x1 = CoordElem[1][0]
+    x2 = CoordElem[2][0]
+    x3 = CoordElem[3][0]
+    y0 = CoordElem[0][1]
+    y1 = CoordElem[1][1]
+    y2 = CoordElem[2][1]
+    y3 = CoordElem[3][1]
+
+    # Get Tangential direction form node i to j, i< j as + direction
+    Tb = np.array([x1 - x0, y1 - y0])
+    Lb = math.sqrt(Tb[0]**2 + Tb[1]**2)
+    Tb = Tb/Lb
+    Tr = np.array([x3 - x1, y3 - y1])
+    Lr = math.sqrt(Tr[0]**2 + Tr[1]**2)
+    Tr = Tr/Lr
+    Tl = np.array([x2 - x0, y2 - y0])
+    Ll = math.sqrt(Tl[0]**2 + Tl[1]**2)
+    Tl = Tl/Ll
+    Tt = np.array([x3 - x2, y3 - y2])
+    Lt = math.sqrt(Tt[0]**2 + Tt[1]**2)
+    Tt = Tt/Lt
+    # do cross product with positive z-direction
+    # Normal for bottom and right edges are outward,
+    # and for top and left edges are inward
+    Nb = np.array([Tb[1], -Tb[0]])
+    Nr = np.array([Tr[1], -Tr[0]])
+    Nl = np.array([Tl[1], -Tl[0]])
+    Nt = np.array([Tt[1], -Tt[0]])
+
+    return Nb, Nr, Nl, Nt
+
+
+def GetElementRestriction(mesh, nelx, nely, e):
+    """
+    This function is map between local to global dof or element restriction operator.
+    We use this function to scatter the local vector or matrix
+    to global vector or matrix in assembly process
+    """
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    neldof = 8
+    temp = np.zeros((neldof,1),dtype=int)
+    
+    # This is the normal of global dof
+    Nb, Nr, Nl, Nt = GetGlobalNormal(mesh, nelx, nely, e)
+    CoordElem = GetCoordElem(mesh, nelx, nely, e)
+    # This is the normal of local dof
+    nl, X = GetNormal(CoordElem, [-1., 0.])
+    nr, X = GetNormal(CoordElem, [1., 0.])
+    nb, X = GetNormal(CoordElem, [0., -1.])
+    nt, X = GetNormal(CoordElem, [0., 1.])
+    Loc2Globnormal = np.array([np.dot(nb,Nb), np.dot(nb,Nb), np.dot(nr,Nr), np.dot(nr,Nr),
+                               np.dot(nl,Nl), np.dot(nl,Nl), np.dot(nt,Nt), np.dot(nt,Nt)])
+    temp[:,0] = LMu[:,e]
+    # element restriction operator
+    L = np.zeros((neldof,ndof))
+    for i in range(neldof):
+        if Loc2Globnormal[i] >0:
+            # local dof and global dof are in same direction
+            L[i][temp[i][0]] = 1
+        else:
+            # local dof and global dof are in opposite direction
+            L[i][temp[i][0]] = -1
+
+    return L 
+
+def GetSharedEdgeDof(nelx, nely):
+    """
+    This function returns the global dof on shared edge.
+    In projection of exact vector u, in shared edges, we need to divide it by 2, to avoid
+    counting a vector dof twice.
+    """
+    LMu = GetLMu(nelx, nely)
+    numelem = nelx*nely
+    neldof = 8
+    # get all shared edges
+    sharededge1=[]
+    for e1 in range(0,numelem):
+        for e2 in range(1,numelem):
+            for j in range(neldof):
+                for i in range(neldof):
+                    if LMu[j][e1]==LMu[i][e2] and e1 != e2:
+                        sharededge1.append(LMu[j][e1])
+    # delete the possible repeated dof           
+    sharededge2 = [] 
+    [sharededge2.append(x) for x in sharededge1 if x not in sharededge2] 
+    idx = np.argsort(sharededge2)
+    # sort shared global dof
+    sharededge = []
+    for i in range(0,len(sharededge2)):
+        sharededge.append(sharededge2[idx[i]])
+
+    return sharededge
+
+
+def GetLocalMassMat(coord_E,Q,quadmethod):
+    """This function returns the interpolation matrix at quadrature points
+    N and mass matrix Me = N^T*W*N (interpolation of (v,K^{-1}*u)), where
+    W = diag(W1,W2,...Wq) and Wi = wi*K^{-1} where K^{-1} is inverse of permeability matrix
+    Wi is 2x2 matrix. and 
+    N: Nodal basis evaluated at quadrature points
+    shape of N is (2*Q*Q,8) again Q is quadrature points in 1D
+
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    Me: the nodal interpolation matrix computed at quadrature points
+    shape (8,8), 
+    """
+    w, q = GetQuadrature(Q, quadmethod)
+    N = np.zeros((0,8))
+    W = np.zeros((2*Q*Q,2*Q*Q))
+    for i in range(Q):
+        for j in range(Q):
+            xhat = q[j]
+            yhat = q[i]
+            ww = w[i]*w[j]
+            Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
+            N = np.append(N,Nhat, axis=0)
+            X, DF_E, J_E = BilinearMap(coord_E, [xhat,yhat])
+            x = X[0][0]
+            y = X[1][0]
+            k = Perm(x, y)
+            kinv = np.linalg.inv(k)
+            W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww*J_E
+            W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww*J_E
+            W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww*J_E
+            W[2*j+1+2*Q*i][2*j+1+2*Q*i]=kinv[1][1]*ww*J_E
+
+    Me = N.T @ W @ N
+    return Me
+
+def GetLocalDivANDForcing(MMS,coord_E,Q,quadmethod):
+    """This function returns the interpolation matrix at quadrature points
+    for (q,div(u)) term in weak form and forcing term (q,f)
+
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    Be: interpolation of (q,div(u)) as (1,8) array
+    Fpe: interpolation of (q,f) as 1x1 array
+    """
+    w, q = GetQuadrature(Q, quadmethod)
+    D = np.zeros((0,8))
+    Nhatp = np.array([[1]])
+    Np = np.zeros((0,1))
+    W = np.zeros((Q*Q,Q*Q))
+    Fp = np.zeros((0,1))
+    for i in range(Q):
+        for j in range(Q):
+            xhat = q[j]
+            yhat = q[i]
+            ww = w[i]*w[j]
+            X, DF_E, J_E = BilinearMap(coord_E, [xhat,yhat])
+            x = X[0][0]
+            y = X[1][0]
+            if MMS == 'trig':
+            # see sec.6 of AC paper 2016
+                f = ForcingTrig(x, y)
+                fp = np.array([[f]])
+            elif MMS == 'quartic':
+                f = ForcingQuartic(x, y)
+                fp = np.array([[f]])
+            elif MMS == 'quadratic':
+                f = ForcingQuadratic(x, y)
+                fp = np.array([[f]])
+            elif MMS == 'linear':
+                f = ForcingLinear(x, y)
+                fp = np.array([[f]])
+            elif MMS == 'constant':
+                f = ForcingConstant(x, y)
+                fp = np.array([[f]])
+            else:
+                print('ENter MMS solution, trig, quartic or quadratic')
+            Fp = np.append(Fp,fp,axis=0)
+            Dhat = GetDivACNodalBasis(coord_E)
+            D = np.append(D,Dhat, axis=0)
+            Np = np.append(Np,Nhatp,axis=0)
+            W[j+Q*i][j+Q*i] = ww*J_E
+
+    Fpe = Np.T @ W @ Fp
+    Be = Np.T @ W @ D
+
+    return Be, Fpe
+
+
+def Assembly(massQmode,MMS, mesh, nelx, nely, Q, quadmethod):
+    """This function assembles M=(v,kinv*u), B=(q,div(u)) and Fp=(q,f)
+    """
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    Fp = np.zeros((numelem, 1))
+    M = np.zeros((ndof,ndof))
+    B = np.zeros((numelem, ndof))
+
+    for e in range(numelem):
+        # get element restriction operator L for element e
+        L = GetElementRestriction(mesh, nelx, nely, e)
+        # get discretized vector u for element e
+        CoordElem = GetCoordElem(mesh, nelx, nely, e)
+        Me = GetLocalMassMat(CoordElem,Q,massQmode)
+        Be, Fpe = GetLocalDivANDForcing(MMS, CoordElem,Q,quadmethod)
+        
+        # assemble M
+        M = M + L.T @ Me @ L
+        # assemble B
+        B[e,:] = (-1*Be) @ L
+        Fp[e,:] = (-1*Fpe)
+
+    P = np.zeros((numelem,numelem))
+    K = np.block([[M, B.T],[B, P]])
+    Fu = np.zeros((ndof,1))
+    F = np.block([[Fu],[Fp]])
+
+    return F, K
+
+
+def GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e):
+
+    w, q = GetQuadrature(Q, quadmethod)
+    W = np.zeros((Q,Q))
+    G = np.zeros((Q,1))
+    N_bc = np.zeros((8,Q))
+    coord_E = GetCoordElem(mesh, nelx, nely, e)
+
+    x0 = coord_E[0][0]
+    y0 = coord_E[0][1]
+    x1 = coord_E[1][0]
+    y1 = coord_E[1][1]
+    x2 = coord_E[2][0]
+    y2 = coord_E[2][1]
+    x3 = coord_E[3][0]
+    y3 = coord_E[3][1]
+
+    for i in range(Q):
+        if edge == 'bottom':
+            yhat = -1.
+            xhat = q[i]
+            # edge length
+            le = math.sqrt((x1-x0)**2 + (y1-y0)**2)
+            # Jacobian
+            je = le/2
+            n, X = GetNormal(coord_E, [0., -1.])
+        elif edge == 'right':
+            yhat = q[i]
+            xhat = 1.
+            # edge length
+            le = math.sqrt((x3-x1)**2 + (y3-y1)**2)
+            # Jacobian
+            je = le/2
+            n, X = GetNormal(coord_E, [1., 0.])
+        elif edge == 'top':
+            yhat = 1.
+            xhat = q[i]
+            # edge length
+            le = math.sqrt((x3-x2)**2 + (y3-y2)**2)
+            # Jacobian
+            je = le/2
+            n, X = GetNormal(coord_E, [0., 1.])
+        elif edge == 'left':
+            yhat = q[i]
+            xhat = -1.
+            # edge length
+            le = math.sqrt((x2-x0)**2 + (y2-y0)**2)
+            # Jacobian
+            je = le/2
+            n, X = GetNormal(coord_E, [-1., 0.])
+        else:
+            print("edge is not defined")
+
+        X, DF_E, J_E = BilinearMap(coord_E, [xhat, yhat])
+        Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
+        N_dot_n = np.dot(Nhat.T,n)
+        N_bc[:,i] = N_dot_n[:]
+        x = X[0][0]
+        y = X[1][0]
+        if MMS == 'trig':
+            p = PressureTrig(x, y)
+            g = p
+        elif MMS == 'quartic':
+            p = PressureQuartic(x, y)
+            g = p
+        elif MMS == 'quadratic':
+            p = PressureQuadratic(x, y)
+            g = p
+        elif MMS == 'linear':
+            p = PressureLinear(x, y)
+            g = p
+        elif MMS == 'constant':
+            p = PressureConstant(x, y)
+            g = p
+        else:
+            print('Enter MMS solution, trig, quartic or quadratic')
+
+        G[i,0] = g
+        W[i][i] = w[i]*je
+
+    t = N_bc @ W @ G
+
+    return t
+
+def GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge):
+
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    T = np.zeros((ndof+numelem,1))
+    if edge == 'bottom':
+        for e in range(nelx):
+            d1 = LMu[0,e]
+            d2 = LMu[1,e]
+            t = GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e)
+            T[d1][0] = t[0][0]
+            T[d2][0] = t[1][0]
+    
+    elif edge == 'right':
+        for e in range(nelx-1,numelem,nelx):
+            d1 = LMu[2,e]
+            d2 = LMu[3,e]
+            t = GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e)
+            T[d1][0] = t[2][0]
+            T[d2][0] = t[3][0]
+
+    elif edge == 'left':
+        for e in range(0,numelem-nelx+1,nelx):
+            d1 = LMu[4,e]
+            d2 = LMu[5,e]
+            t = GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e)
+            # since the Global dof on left is in oppsite direction of local dof
+            T[d1][0] = -t[4][0]
+            T[d2][0] = -t[5][0]
+
+    elif edge == 'top':
+        for e in range(numelem-nelx,numelem):
+            d1 = LMu[6,e]
+            d2 = LMu[7,e]
+            t = GetLocalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edge, e)
+            # since the Global dof on left is in oppsite direction of local dof
+            T[d1][0] = -t[6][0]
+            T[d2][0] = -t[7][0]
+
+    elif edge == 'all':
+        edges = ['bottom','right','top','left']
+        for i in range(4):
+            t = GetGlobalTraction(MMS, mesh, nelx, nely, Q, quadmethod, edges[i])
+            T = T + t
+    
+    else:
+        print("specify the edge")
+
+    return T
+
+
+def GetFESol(K,F,nelx,nely):
+    """
+    This function returns the FE global u and p
+    """
+    d = np.linalg.solve(K, F)
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    numelem = nelx*nely
+    du = np.zeros((ndof,1))
+    dp = np.zeros((numelem,1))
+    for i in range(ndof):
+        du[i,0] = d[i,0]
+
+    for i in range(numelem):
+        dp[i] = d[ndof+i,0]
+
+    return dp, du
+
+
+def GetUexact(MMS, mesh, nelx, nely, e):
+    """
+    This function discretize the vector u on element e
+    """
+    CoordElem = GetCoordElem(mesh, nelx, nely, e)
+
+    nl, X = GetNormal(CoordElem, [-1., 0.])
+    nr, X = GetNormal(CoordElem, [1., 0.])
+    nb, X = GetNormal(CoordElem, [0., -1.])
+    nt, X = GetNormal(CoordElem, [0., 1.])
+
+    normals = np.block([[nb],[nb],[nr],[nr],[nl],[nl],[nt],[nt]])
+    nodes = np.block([CoordElem[0,:],CoordElem[1,:],CoordElem[1,:],CoordElem[3,:],
+                      CoordElem[0,:],CoordElem[2,:],CoordElem[2,:],CoordElem[3,:]])
+
+    ue = np.zeros((8,1))
+    for i in range(8):
+        x = nodes[2*i]
+        y = nodes[2*i+1]
+        if MMS == 'trig':
+            u = VelocityTrig(x, y)
+            ue[i][0] = np.dot(u,normals[i,:])
+        elif MMS == 'quartic':
+            u = VelocityQuartic(x, y)
+            ue[i][0] = np.dot(u,normals[i,:])
+        elif MMS == 'quadratic':
+            u = VelocityQuadratic(x, y)
+            ue[i][0] = np.dot(u,normals[i,:])
+        elif MMS == 'linear':
+            u = VelocityLinear(x, y)
+            ue[i][0] = np.dot(u,normals[i,:])
+        elif MMS == 'constant':
+            u = VelocityConstant(x, y)
+            ue[i][0] = np.dot(u,normals[i,:])
+        else:
+            print('ENter MMS solution, trig, quartic or quadratic')
+
+    return ue
+
+def GetExactSol(MMS, mesh, nelx, nely):
+    """
+    This function returns the global exact u and p
+    """
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    u = np.zeros((ndof, 1))
+    
+    for e in range(numelem):
+        # get element restriction operator L for element e
+        L = GetElementRestriction(mesh, nelx, nely, e)
+        # get discretized vector u for element e
+        ue = GetUexact(MMS, mesh, nelx, nely, e)
+        # assemble U
+        u = u + L.T @ ue
+
+    # divide those repeated dof in shared edges by 2
+    edgedof = GetSharedEdgeDof(nelx, nely)
+    for i in range(len(edgedof)):
+        u[edgedof[i],0] = u[edgedof[i],0]/2
+
+    x , y = GetNodeCoord(mesh, nelx, nely)
+    xp = np.zeros((numelem,1))
+    yp = np.zeros((numelem,1))
+    p = np.zeros((numelem,1))
+    for i in range(nely):
+        for j in range(nelx):
+            xp[j + i*nelx][0] = (x[j + i*(nelx+1)][0]+x[j + i*(nelx+1)+1][0])/2
+            yp[j + i*nelx][0] = (y[j + i*(nelx+1)][0]+y[(nelx+1 + j) + i*(nelx+1)][0])/2
+
+    for i in range(numelem):
+        x = xp[i][0]
+        y = yp[i][0]
+        if MMS == 'trig':
+            pe = PressureTrig(x, y)
+            p[i][0] = pe
+        elif MMS == 'quartic':
+            pe = PressureQuartic(x, y)
+            p[i][0] = pe
+        elif MMS == 'quadratic':
+            pe = PressureQuadratic(x, y)
+            p[i][0] = pe
+        elif MMS == 'linear':
+            pe = PressureLinear(x, y)
+            p[i][0] = pe
+        elif MMS == 'constant':
+            pe = PressureConstant(x, y)
+            p[i][0] = pe
+        else:
+            print('ENter MMS solution, trig, quartic, quadratic, linear or constant')
+
+    return p, u
+
+def GetResidual(K,u,p, nelx, nely):
+    U = np.block([[u],[p]])
+    res = K @ U
+
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    numelem = nelx*nely
+    res_u = np.zeros((ndof,1))
+    res_p = np.zeros((numelem,1))
+    for i in range(ndof):
+        res_u[i,0] = res[i,0]
+
+    for i in range(numelem):
+        res_p[i] = res[ndof+i,0]
+
+    return res_p, res_u
+
+
+def PopulateNode(mesh, nelx, nely):
+    """This function populates the nodes we have for plotting purpose
+    note that GetNodeCoord returns the coordinate of for example
+    6----7----8
+    |    |    |
+    3----4----5          (A)
+    |    |    |
+    0----1----2
+
+    Now we create 
+    6----7----8
+    |    ||   |
+    3====4====5          (B)
+    |    ||   |
+    0----1----2
+    we duplicate the interior edges since we have dof on edge NOT node for ploting.
+
+    Output:
+    -------
+    X, Y: meshgrid of coordinates of nodes in B for contourplot
+    """
+    # interior nodes in x direction
+    in_nodex = nelx - 1
+    # interior nodes in y direction
+    in_nodey = nely - 1
+    # number of total new nodes we have (duplicating the interior nodes)
+    nnx = 2+2*in_nodex
+    nny = 2+2*in_nodey
+    # this functions gives coordinate of nodes (A)
+    x , y = GetNodeCoord(mesh,nelx, nely)
+    xx = x.reshape((nely+1,nelx+1))
+    yy = y.reshape((nely+1,nelx+1))
+
+    X = np.zeros((nny,nnx))
+    Y = np.zeros((nny,nnx))
+    for j in range(nely):
+        for i in range(nelx):
+            X[2*j,2*i] = xx[j,i]
+            X[2*j,2*i+1] = xx[j,i+1]
+            X[2*j+1,2*i] = xx[j+1,i]
+            X[2*j+1,2*i+1] = xx[j+1,i+1]
+            Y[2*j,2*i] = yy[j,i]
+            Y[2*j,2*i+1] = yy[j,i+1]
+            Y[2*j+1,2*i] = yy[j+1,i]
+            Y[2*j+1,2*i+1] = yy[j+1,i+1]
+
+    return X, Y
+
+def PltSolution(mesh,nelx, nely, u, p, title1, title2, title3):
+
+    X , Y = PopulateNode(mesh,nelx, nely)
+    in_nodex = nelx - 1
+    in_nodey = nely - 1
+    nnx = 2+2*in_nodex
+    nny = 2+2*in_nodey
+    UUy = np.zeros((nely+1, nnx))
+    for j in range(0,nely+1):
+        for i in range(0,nnx):
+            UUy[j,i] = u[i+(2*(nelx+1)+2*nelx)*j]
+            
+    Uy = np.zeros((nny, nnx))
+    Uy[0,:] = UUy[0,:]
+    Uy[nny-1,:] = UUy[nely,:]
+    for i in range(1,in_nodey+1):
+        Uy[2*i-1,:] = UUy[i,:]
+        Uy[2*i,:] = UUy[i,:]
+
+    UUx = np.zeros((nny, nelx+1))
+    for k in range(nely):
+        for j in range(0,2):
+            l = j+k*2
+            for i in range(0,nelx+1):
+                UUx[l,i] = u[nnx + 2*i + j + k*(nnx*1+2*(nelx+1))]
+
+    Ux = np.zeros((nny, nnx))
+    Ux[:,0] = UUx[:,0]
+    Ux[:,nnx-1] = UUx[:,nelx]
+    for i in range(1,in_nodex+1):
+        Ux[:,2*i-1] = UUx[:,i]
+        Ux[:,2*i] = UUx[:,i]
+
+    PP = np.zeros((nny, nnx))
+    for j in range(0,nely):
+        for i in range(0,nelx):         
+            PP[2*j,2*i] = p[i + j*nelx]
+            PP[2*j,2*i+1] = p[i + j*nelx]
+            PP[2*j+1,2*i] = p[i + j*nelx]
+            PP[2*j+1,2*i+1] = p[i + j*nelx]
+
+    plt.contourf(X, Y, Ux, 100, cmap=plt.get_cmap('coolwarm'))
+    plt.colorbar()
+    plt.title(title1)
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.axis('equal')
+    plt.show()
+
+    plt.contourf(X, Y, Uy, 100, cmap=plt.get_cmap('coolwarm'))
+    plt.colorbar()
+    plt.title(title2)
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.axis('equal')
+    plt.show()
+
+    plt.contourf(X, Y, PP, 100, cmap=plt.get_cmap('coolwarm'))
+    plt.colorbar()
+    plt.title(title3)
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.axis('equal')
+    plt.show()
+
+    return
+
+#============================= for testing div operator (start) ===============================#
+def uexact(x,y):
+    #if you change u, don't forget to update div
+    u = [x-y,x+y]
+
+    return u
+
+def div_u():
+    # this is the div(u), for unit test
+    # if you changed u above update div(u) here
+    # then run unit test
+    return 2.
+
+def GetVecUe(mesh, nelx, nely, e):
+    """
+    This function discretize the vector u = uexact(x,y) on element e
+    on AC space.
+    local numbering of dof is
+     v6     v7
+    2---------3
+  v5|         |v3
+    |         |
+  v4|         |v2
+    0---------1
+     v0     v1
+    """
+    CoordElem = GetCoordElem(mesh, nelx, nely, e)
+
+    nl, X = GetNormal(CoordElem, [-1., 0.])
+    nr, X = GetNormal(CoordElem, [1., 0.])
+    nb, X = GetNormal(CoordElem, [0., -1.])
+    nt, X = GetNormal(CoordElem, [0., 1.])
+
+    normals = np.block([[nb],[nb],[nr],[nr],[nl],[nl],[nt],[nt]])
+    nodes = np.block([CoordElem[0,:],CoordElem[1,:],CoordElem[1,:],CoordElem[3,:],
+                      CoordElem[0,:],CoordElem[2,:],CoordElem[2,:],CoordElem[3,:]])
+
+    ue = np.zeros((8,1))
+    for i in range(8):
+        x = nodes[2*i]
+        y = nodes[2*i+1]
+        u = uexact(x,y)
+        ue[i][0] = np.dot(u,normals[i,:])
+
+    return ue
+
+def AssembleDivOperator(mesh, nelx, nely):
+    """This function assembles div(u) and vector u.
+    we test divergence operator on multiple elements
+    This is for testing divergence operator given in uint test
+    """
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    U = np.zeros((ndof, 1))
+    D = np.zeros((numelem, ndof))
+    
+    for e in range(numelem):
+        # get element restriction operator L for element e
+        L = GetElementRestriction(mesh, nelx, nely, e)
+        # get discretized vector u for element e
+        Ue = GetVecUe(mesh, nelx, nely, e)
+        # get divergence for element e
+        CoordElem = GetCoordElem(mesh, nelx, nely, e)
+        De = GetDivACNodalBasis(CoordElem)
+        # assemble U
+        U = U + L.T @ Ue
+        # assemble Divergence
+        D[e,:] = De @ L
+
+    # divide those repeated dof in shared edges by 2
+    edgedof = GetSharedEdgeDof(nelx, nely)
+    for i in range(len(edgedof)):
+        U[edgedof[i],0] = U[edgedof[i],0]/2
+
+    return U, D
+
+
+#============================= for testing mass operator(start) ===============================#
+# here we solve (v,kinv*uh) = (v,kinv*ue)
+def GetLocalVecExcact(coord_E,Q,quadmethod):
+    """This function returns Ve = (v,kinv*ue), which is 8x1 vector
+
+    Input:
+    ------
+    coord_E: coordinate of element E as 4x2 array
+    Q: number of quadrature points you want in 1D
+    quadmethod: The method for computing q and w
+    either 'GAUSS' or 'LGL'
+
+    Output:
+    -------
+    Ve: (8,1) vector 
+    """
+    w, q = GetQuadrature(Q, quadmethod)
+    Ve = np.zeros((8,1))
+    for i in range(Q):
+        for j in range(Q):
+            xhat = q[j]
+            yhat = q[i]
+            ww = w[i]*w[j]
+            Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
+            X, DF_E, J_E = BilinearMap(coord_E, [xhat,yhat])
+            x = X[0][0]
+            y = X[1][0]
+            k = Perm(x, y)
+            kinv = np.linalg.inv(k)
+            u = uexact(x,y)
+            ue = np.array([[u[0]], [u[1]]])
+            Ve = Ve + ww*J_E*Nhat.T @ kinv @ ue
+
+    return Ve
+
+
+def AssemblyTestMass(mesh, nelx, nely, Q, quadmethod):
+    """This function assembles (v,kinv*uh) = (v,kinv*ue) or M*du = V,
+    then we compare du with projection of exact solution U
+    """
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    V = np.zeros((ndof, 1))
+    U = np.zeros((ndof, 1))
+    M = np.zeros((ndof,ndof))
+    
+    for e in range(numelem):
+        # get element restriction operator L for element e
+        L = GetElementRestriction(mesh, nelx, nely, e)
+        # get coordinate for element e
+        CoordElem = GetCoordElem(mesh, nelx, nely, e)
+        # get (v,kinv*ue)
+        Ve = GetLocalVecExcact(CoordElem,Q,quadmethod)
+        # get (v,kinv*uh)
+        Me = GetLocalMassMat(CoordElem,Q,quadmethod)
+        # get the projection of exact solution in AC space
+        Ue = GetVecUe(mesh, nelx, nely, e)
+
+        # assemble M
+        M = M + L.T @ Me @ L
+        # assemble V
+        V = V + L.T @ Ve
+        # assemble U
+        U = U + L.T @ Ue
+
+    # divide those repeated dof in shared edges by 2
+    # only the projection of exact solution
+    edgedof = GetSharedEdgeDof(nelx, nely)
+    for i in range(len(edgedof)):
+        U[edgedof[i],0] = U[edgedof[i],0]/2
+
+    return M, V, U
+
+#============================= for InfSup constant (start) ===============================#
+
+def GetLocalInfSupMat(coord_E,Q,quadmethod):
+    """In equation 3.2 of Arnold nad Marie 2009 we have
+    <u,v>_V + b(v,p) + b(u,q) = -lamda<p,q>_Q   for all v,q in VxQ
+
+    and in eq. 3.4
+    a(u,v) + b(v,p) + b(u,q) = lamda<u,v>_V     for all v,q in VxQ
+
+    In our problem V=H(div), Q=L^2, and the inner product <.,.> is
+    <u,v>_V = \int{u v   + div(u) div(v)}
+    <p,q>_Q = \int{p q}
+    a(u,v) = \int{v k^{-1}u}  (here we consider k=I)
+    b(u,q) = \int{q div(u)}
+
+    In this function we discrtize above quantity for an element
+    """
+    w, q = GetQuadrature(Q, quadmethod)
+    N = np.zeros((0,8))
+    D = np.zeros((0,8))
+    Np = np.zeros((0,1))
+    Nhatp = np.array([[1]])
+    W = np.zeros((2*Q*Q,2*Q*Q))
+    W1 = np.zeros((2*Q*Q,2*Q*Q))
+    W2 = np.zeros((Q*Q,Q*Q))
+    for i in range(Q):
+        for j in range(Q):
+            xhat = q[j]
+            yhat = q[i]
+            ww = w[i]*w[j]
+            Nhat = GetACNodalBasis(coord_E, [xhat,yhat])
+            N = np.append(N,Nhat, axis=0)
+            Dhat = GetDivACNodalBasis(coord_E)
+            D = np.append(D,Dhat, axis=0)
+            Np = np.append(Np,Nhatp,axis=0)
+            X, DF_E, J_E = BilinearMap(coord_E, [xhat,yhat])
+            x = X[0][0]
+            y = X[1][0]
+            k = Perm(x, y)
+            kinv = np.linalg.inv(k)
+            # this is for a(u,v)
+            W[2*j+2*Q*i][2*j+2*Q*i]=kinv[0][0]*ww*J_E
+            W[2*j+2*Q*i][2*j+1+2*Q*i]=kinv[0][1]*ww*J_E
+            W[2*j+1+2*Q*i][2*j+2*Q*i]=kinv[1][0]*ww*J_E
+            W[2*j+1+2*Q*i][2*j+1+2*Q*i]=kinv[1][1]*ww*J_E
+            # this is for int{u v}
+            W1[2*j+2*Q*i][2*j+2*Q*i]=ww*J_E
+            W1[2*j+1+2*Q*i][2*j+1+2*Q*i]=ww*J_E
+            W2[j+Q*i][j+Q*i] = ww*J_E
+
+    # \int{u v}
+    u_v = N.T @ W1 @ N
+    # \int{div(u) div(v)}
+    div_e = D.T @ W2 @ D
+    # <u,v>_V
+    He = u_v + div_e
+    # <p, q>_Q
+    Ce = Np.T @ W2 @ Np
+    # b(u,q)
+    Be = Np.T @ W2 @ D 
+    # a(u,v)
+    Me = N.T @ W @ N
+
+    return He, Me, Be, Ce
+
+
+def GetGlobalInfSupMat(mesh, nelx, nely, Q, quadmethod):
+    """
+    This fuction assembles He, Me, Be, Ce
+    """
+    numelem = nelx*nely
+    LMu = GetLMu(nelx, nely)
+    ndof = np.amax(LMu) + 1
+    H = np.zeros((ndof,ndof))
+    M = np.zeros((ndof,ndof))
+    B = np.zeros((numelem, ndof))
+    C = np.zeros((numelem,numelem))
+    for e in range(numelem):
+        # get element restriction operator L for element e
+        L = GetElementRestriction(mesh, nelx, nely, e)
+        # get discretized vector u for element e
+        CoordElem = GetCoordElem(mesh, nelx, nely, e)
+        He, Me, Be, Ce = GetLocalInfSupMat(CoordElem,Q,quadmethod)
+        
+        # assemble H, M
+        H = H + L.T @ He @ L
+        M = M + L.T @ Me @ L
+        # assemble B, C
+        B[e,:] = Be @ L
+        C[e,e] = Ce
+
+    return H, M, B, C
+
+
+def GetInfSupConst(H, M, B, C):
+    """ This function solves
+    <u,v>_V + b(v,p) + b(u,q) = -lamda<p,q>_Q
+    where 
+    beta = \sqrt{\lambda_min} is the inf-sup constant
+    and 
+    a(u,v) + b(v,p) + b(u,q) = lamda<u,v>_V
+    where 
+    alpha = min(abs(\lambda)) which is coercivity constant
+    """
+
+    Hinv = np.linalg.inv(H)
+    LHS1 = B @ Hinv @ B.T
+    RHS1 = C
+    D1, V1 = scipy.linalg.eig(LHS1, RHS1) 
+    D1 = D1.real
+    lambda1_min = np.min(D1) 
+    # inf-sup constant
+    beta = math.sqrt(lambda1_min)
+
+    LHS2 = np.block([[M, B.T],[B, 0*C]])
+    RHS2 = np.block([[H, 0*B.T],[0*B, 0*C]])
+    D2, V2 = scipy.linalg.eig(LHS2, RHS2) 
+    D2 = D2.real
+    # coercivity cosntant
+    alpha = np.amin(abs(D2))
+
+    return alpha, beta
