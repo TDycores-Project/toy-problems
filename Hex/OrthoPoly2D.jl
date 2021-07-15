@@ -2,8 +2,8 @@ function poly2d(px, py)
     """
     Construct a 2D polynomial based on 1D basis in x and y directions.
     Input:
-    px: polynomial in x direction
-    py: polynomial in y direction
+    px: polynomial in x direction or direction 1
+    py: polynomial in y direction or direction 2
     Return:
     Matrix p, which is the coefficients of a 2D polynomial p(x,y)
     """
@@ -24,9 +24,11 @@ function poly2d(px, py)
     return p
 end
 
-function polystring2d(p; threshold=1e-12)
+function polystring2d(p, var1, var2; threshold=1e-12)
     """Construct a string representation of the polynomial p(x,y) in 2D
-    p: polynomial coefficients in x and y directions created by poly2d function 
+    p: polynomial coefficients in x and y directions created by poly2d function
+    var1: the 1st variable of polynomial for displaying, can be "x", "y", or "z"
+    var2: the 2nd variable of polynomial for displaying, can be "x", "y", or "z"
     """
     n,m = size(p)
     k = n * m
@@ -38,7 +40,7 @@ function polystring2d(p; threshold=1e-12)
             if (abs(a) < threshold) 
                 a = 0.0
             end
-            pol[kk] = "$a x^$(i-1) y^$(j-1)"
+            pol[kk] = "$a $var1^$(i-1) $var2^$(j-1)"
             kk += 1 
         end
     end
@@ -46,12 +48,12 @@ function polystring2d(p; threshold=1e-12)
     join((pol[i] for i=1:k), " + ")
 end
 
-function polydisp2d(name, p)
+function polydisp2d(name, var1, var2, p)
     """Display the polynomial with friendly math formatting.
     p: polynomial coefficients in x and y directions created by poly2d function
     """
     
-    s = join(('$', "$name(x,y) = ", polystring2d(p), '$'))
+    s = join(('$', "$name($var1,$var2) = ", polystring2d(p, var1, var2), '$'))
     # If you download this notebook, you can uncomment the following
     # line to display rendered math.
     display("text/latex", s)
@@ -87,7 +89,7 @@ function polyval2d(p, x, y)
 end
 
 function polyderiv2d(p, deriv)
-    """Evaluate dp/d1 or dp/d2 which means derivative of p with respect to 1st and 2nd argument
+    """Evaluate dp/d1 or dp/d2 which means derivative of p with respect to 1st and 2nd variable
     Input:
     p: polynomial coefficients in 2D 
     deriv: can be "d1" or "d2"
