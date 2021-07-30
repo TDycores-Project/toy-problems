@@ -1633,7 +1633,7 @@ function GetGlobalMat(Coord_Ns, LM, IENn, Q1d, Q_tri)
 end
 
 
-function GetInfSupConst(S, B, C)
+function GetInfSupConst(M, S, B, C)
     """ This function solves
     <u,v>_V + b(v,p) + b(u,q) = -lamda<p,q>_Q
     where 
@@ -1641,15 +1641,23 @@ function GetInfSupConst(S, B, C)
     """
 
     Sinv = inv(S)
-    LHS1 = B * Sinv * B'
+    LHS1 = B*Sinv*B'
     RHS1 = C
-    D, V = eigvals(LHS1, RHS1)
-    D = real(D)
-    lambda1_min = minimum(D) 
+    D1 = eigvals(LHS1, RHS1)
+    D1 = real(D1)
+    lambda1_min = minimum(D1) 
     # inf-sup constant
     beta = sqrt(lambda1_min)
 
-    return beta
+    C0 = zeros(size(C))
+    B0 = zeros(size(B))
+    LHS2 =[M B';B C0]
+    RHS2 =[S B0';B0 C0]
+    D2 = eigvals(LHS2, RHS2)
+    D2 = real(D2)
+    alpha = minimum(abs.(D2))
+    
+    return alpha, beta
 end
 
 #============================================ Maximum Normal Trace ===============================================#

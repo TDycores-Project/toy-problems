@@ -79,7 +79,7 @@ end
 
 theta_z = 30
 # mesh can be "uniform", "nonuniform", "terrain" "random"
-n = 3
+n = 4
 p = PlotMesh(mesh, n, n, n, a, b, c, theta_z)
 plot(p)
 xlabel!("x")
@@ -127,7 +127,7 @@ if problem == "convrate"
     plot!(H, H2p, xaxis=:log, yaxis=:log, lw = 2, linestyles = :dash, color="green",label="O(h^1)" ,legend=:bottomright)
     xlabel!("h")
     ylabel!("relative errors")
-    name2 = "$problem-$mesh-$c.png"
+    name2 = "$problem-$mesh-$c-Phy.png"
     savefig(name2)
 
 end
@@ -136,6 +136,7 @@ end
 if problem == "infsup"
 
     beta = zeros(N-1)
+    alph = zeros(N-1)
     H = zeros(N-1)
 
     for i=1:N-1
@@ -148,10 +149,11 @@ if problem == "infsup"
     	IENf, IENn = GetConnectivity(nx, ny, nz)
     	ID = GetID(nx, ny, nz)
     	LM = GetLM(ID, IENf)
-  
+  	M, B, F1 = Assembly(Coord_Ns, LM, IENn, Q1d, Q_tri, Forcing)
     	S, B, C = GetGlobalMat(Coord_Ns, LM, IENn, Q1d, Q_tri)
-    	bb = GetInfSupConst(S, B, C)
+    	aa, bb = GetInfSupConst(M, S, B, C)
     	beta[i] = bb
+    	alph[i] = aa
     
     	h = Gethsize(Coord_Ns, IENn)
     	H[i] = h
@@ -159,7 +161,12 @@ if problem == "infsup"
     plot(H, beta, xaxis=:log, lw = 3,ylims=Plots.widen(0, 1), legend=false)
     xlabel!("h")
     ylabel!("Inf-Sup constant")
-    name3 = "$problem-$mesh-$c.png"
+    name3 = "infsup-$mesh-$c-Phy.png"
+    savefig(name3)
+    plot(H, alph, xaxis=:log, lw = 3,ylims=Plots.widen(0, 1), legend=false)
+    xlabel!("h")
+    ylabel!("Coercivity constant")
+    name3 = "coercivity-$mesh-$c-Phy.png"
     savefig(name3)
 end
 
@@ -186,6 +193,6 @@ if problem == "normaltrace"
     plot(H, mt, xaxis=:log, yaxis=:log, lw = 3, linestyles = :solid, color="black", label = false)
     xlabel!("h")
     ylabel!("maximum of normal trace")
-    name4 = "$problem-$mesh-$c.png"
+    name4 = "$problem-$mesh-$c-Phy.png"
     savefig(name4)
 end
